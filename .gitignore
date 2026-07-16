@@ -1,0 +1,8 @@
+runs/
+results/
+data/
+wandb/
+__pycache__/
+*.pyc
+.DS_Store
+.cache/
