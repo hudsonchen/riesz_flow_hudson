@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-NGPU=${NGPU:-$(nvidia-smi -L 2>/dev/null | wc -l)}
-if [ "$NGPU" -lt 1 ]; then
-    NGPU=1
-fi
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+source "$SCRIPT_DIR/../accelerator_count.sh"
+NGPU=${NGPU:-$(accelerator_count)}
 
 MASTER_PORT=${MASTER_PORT:-6667}
 CONFIG=configs/gen/imagenet64_pilot.yaml

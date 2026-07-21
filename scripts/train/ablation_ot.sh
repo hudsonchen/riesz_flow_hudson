@@ -1,7 +1,8 @@
 set -euo pipefail
 
-NGPU=${NGPU:-$(nvidia-smi -L 2>/dev/null | wc -l)}
-NGPU=${NGPU:-1}
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+source "$SCRIPT_DIR/../accelerator_count.sh"
+NGPU=${NGPU:-$(accelerator_count)}
 
 MASTER_PORT=${MASTER_PORT:-6667}
 
