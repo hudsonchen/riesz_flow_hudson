@@ -628,7 +628,7 @@ class DitGen(nn.Module):
         else:
             noise_labels = torch.zeros((B, max(1, self.noise_coords)), dtype=torch.long, device=device)
 
-        _use_autocast = self.use_bf16 and device.type == "cuda"
+        _use_autocast = self.use_bf16 and device.type in {"cuda", "xpu"}
         with torch.amp.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=_use_autocast):
             cond = self.c_cfg_noise_to_cond(c, cfg_scale, noise_labels)
             samples = self.generate_image(x, cond, deterministic=deterministic)

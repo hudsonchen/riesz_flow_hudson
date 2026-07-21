@@ -39,7 +39,10 @@ torch.hub.set_dir(TORCH_HUB_DIR)
 
 from torch_fidelity.utils import create_feature_extractor
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+from utils.dist_util import local_device
+
+device = local_device()
+fidelity_device = device if device.type == "cuda" else torch.device("cpu")
 
 # Match current repo:
 # - feature extractor: inception-v3-compat
@@ -48,12 +51,12 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 fe = create_feature_extractor(
     "inception-v3-compat",
     ["2048", "logits_unbiased"],
-    cuda=(device.type == "cuda"),
+    cuda=(fidelity_device.type == "cuda"),
 )
 fe.eval()
 
 # torch-fidelity inception-v3-compat expects NCHW uint8 images in [0, 255].
-x = torch.zeros(1, 3, 256, 256, dtype=torch.uint8, device=device)
+x = torch.zeros(1, 3, 256, 256, dtype=torch.uint8, device=fidelity_device)
 with torch.no_grad():
     features_2048, logits = fe(x)
 print("Downloaded/loaded torch-fidelity Inception successfully.")

@@ -17,7 +17,7 @@ from tqdm import tqdm
 from dataset.dataset import get_postprocess_fn, infinite_sampler
 from drift_loss import drift_loss
 from drift_loss_ot import drift_loss_ot
-from riesz_loss import riesz_loss
+from riesz_loss_mixed_power import riesz_loss
 from memory_bank import ArrayMemoryBank
 from models.mae_model import build_activation_function
 from utils.ckpt_util import restore_checkpoint, save_checkpoint, save_params_ema_artifact
@@ -571,7 +571,7 @@ def train_gen(
                     model_config=_generator_model_config(state.model),
                 )
 
-        if (step % eval_per_step == 0) or (step == 1) or (step == total_steps):
+        if eval_per_step > 0 and step % eval_per_step == 0:
             accelerator_empty_cache()
             is_sanity = step == 1
             n_samples = sanity_samples if is_sanity else eval_samples

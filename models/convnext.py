@@ -209,7 +209,8 @@ def _map_hf_key_to_local(path: str) -> str:
 
 
 def load_convnext_torch_model(model_name: str = "base", use_bf16: bool = False):
-    dtype = torch.bfloat16 if (use_bf16 and torch.cuda.is_available()) else torch.float32
+    from utils.dist_util import accelerator_type
+    dtype = torch.bfloat16 if (use_bf16 and accelerator_type() != "cpu") else torch.float32
     if model_name == "base":
         model = ConvNextBase(dtype=dtype)
         model_load_name = "facebook/convnextv2-base-22k-224"

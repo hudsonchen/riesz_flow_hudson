@@ -1,11 +1,61 @@
 from __future__ import annotations
 
+import getpass
 import os
 from contextlib import suppress
 from typing import Any, Callable
 
 import torch
 import torch.distributed as dist
+
+
+def xpu_is_available() -> bool:
+    """Return whether this PyTorch build has an available Intel XPU."""
+    xpu = getattr(torch, "xpu", None)
+    return xpu is not None and bool(xpu.is_available())
+
+
+def accelerator_type() -> str:
+    """Choose the accelerator, preferring XPU on the Intel GPU host."""
+    if getpass.getuser() == "rc-chen1":
+        return "xpu"
+    if torch.cuda.is_available():
+        return "cuda"
+    if xpu_is_available():
+        return "xpu"
+    return "cpu"
+
+
+def local_device(local_rank: int | None = None) -> torch.device:
+    if local_rank is None:
+        local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+    kind = accelerator_type()
+    return torch.device(kind, local_rank) if kind != "cpu" else torch.device("cpu")
+
+
+def set_local_device(local_rank: int | None = None) -> torch.device:
+    device = local_device(local_rank)
+    if device.type == "cuda":
+        torch.cuda.set_device(device)
+    elif device.type == "xpu":
+        torch.xpu.set_device(device)
+    return device
+
+
+def accelerator_synchronize() -> None:
+    kind = accelerator_type()
+    if kind == "cuda":
+        torch.cuda.synchronize()
+    elif kind == "xpu":
+        torch.xpu.synchronize()
+
+
+def accelerator_empty_cache() -> None:
+    kind = accelerator_type()
+    if kind == "cuda":
+        torch.cuda.empty_cache()
+    elif kind == "xpu":
+        torch.xpu.empty_cache()
 
 
 def dist_is_initialized() -> bool:
@@ -25,8 +75,12 @@ def process_index() -> int:
 
 
 def local_device_count() -> int:
-    if torch.cuda.is_available():
+    kind = accelerator_type()
+    if kind == "cuda":
         n = torch.cuda.device_count()
+        return max(1, int(n))
+    if kind == "xpu":
+        n = torch.xpu.device_count()
         return max(1, int(n))
     return 1
 
@@ -52,10 +106,10 @@ def init_distributed() -> None:
     if world_size <= 1:
         return
 
-    backend = "nccl" if torch.cuda.is_available() else "gloo"
-    if torch.cuda.is_available():
-        local_rank = int(os.environ.get("LOCAL_RANK", "0"))
-        torch.cuda.set_device(local_rank)
+    kind = accelerator_type()
+    default_backend = "nccl" if kind == "cuda" else "xccl" if kind == "xpu" else "gloo"
+    backend = os.environ.get("DIST_BACKEND", default_backend)
+    set_local_device()
     if dist.is_available() and not dist.is_initialized():
         dist.init_process_group(backend=backend)
 
@@ -104,8 +158,8 @@ def _gather_tensor(x: torch.Tensor) -> torch.Tensor:
         return x
 
     orig_device = x.device
-    if x.device.type == "cpu" and torch.cuda.is_available():
-        x = x.cuda()
+    if x.device.type == "cpu" and accelerator_type() != "cpu":
+        x = x.to(local_device())
 
     shape = torch.tensor(x.shape, device=x.device, dtype=torch.int64)
     all_shapes = [torch.zeros_like(shape) for _ in range(world)]
@@ -148,7 +202,7 @@ def maybe_ddp_model(model: torch.nn.Module, device_ids: list[int] | None = None)
     if not dist_is_initialized():
         return model
 
-    if torch.cuda.is_available():
+    if accelerator_type() in {"cuda", "xpu"}:
         return torch.nn.parallel.DistributedDataParallel(model, device_ids=device_ids)
     return torch.nn.parallel.DistributedDataParallel(model)
 

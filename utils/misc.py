@@ -9,7 +9,7 @@ import numpy as np
 import torch
 import yaml
 
-from utils.dist_util import init_distributed
+from utils.dist_util import accelerator_synchronize, init_distributed, xpu_is_available
 
 
 # adapted from https://github.com/NVlabs/edm
@@ -119,13 +119,11 @@ def profile_func(
     if actual_run:
         with torch.no_grad():
             _ = target_fn(*args, **kwargs)
-            if torch.cuda.is_available():
-                torch.cuda.synchronize()
+            accelerator_synchronize()
             t0 = time.perf_counter()
             for _ in range(n_loops):
                 _ = target_fn(*args, **kwargs)
-            if torch.cuda.is_available():
-                torch.cuda.synchronize()
+            accelerator_synchronize()
             dt = (time.perf_counter() - t0) / max(1, n_loops)
         metrics["profile/Time_ms"] = dt * 1000.0
         _profile_log(report, f"[Profile] Runtime: time={metrics['profile/Time_ms']:.2f} ms", console_print=console_print)
@@ -140,3 +138,5 @@ def seed_everything(seed: int) -> None:
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+    elif xpu_is_available():
+        torch.xpu.manual_seed_all(seed)

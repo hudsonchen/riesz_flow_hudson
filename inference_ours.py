@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 from dataset.dataset import get_postprocess_fn
 from models.generator import DitGen
-from utils.dist_util import barrier, init_distributed, process_count, process_index
+from utils.dist_util import barrier, init_distributed, local_device, process_count, process_index
 from utils.env import IMAGENET_FID_NPZ
 from utils.misc import load_config, run_init
 
@@ -24,13 +24,6 @@ run_init()
 def _print0(*args, **kwargs):
     if process_index() == 0:
         print(*args, **kwargs)
-
-
-def _local_device() -> torch.device:
-    if torch.cuda.is_available():
-        local_rank = int(os.environ.get("LOCAL_RANK", "0"))
-        return torch.device("cuda", local_rank)
-    return torch.device("cpu")
 
 
 def _load_model(ckpt_path: str, config_path: str):
@@ -56,7 +49,7 @@ def _load_model(ckpt_path: str, config_path: str):
     if unexpected:
         _print0(f"WARNING: unexpected keys ({len(unexpected)}): {unexpected[:5]}")
 
-    device = _local_device()
+    device = local_device()
     model = model.to(device).eval()
 
     postprocess_fn = get_postprocess_fn(
@@ -206,7 +199,8 @@ def run_eval(
         _print0("Computing metrics via torch-fidelity (inception-v3-compat) ...")
         metrics_dict = calculate_metrics(
             input1=save_folder, input2=fid_ref,
-            cuda=True, isc=True, fid=True, kid=False, prc=False, verbose=True,
+            # torch-fidelity supports CUDA or CPU, but not XPU.
+            cuda=(device.type == "cuda"), isc=True, fid=True, kid=False, prc=False, verbose=True,
         )
 
         fid = metrics_dict.get("frechet_inception_distance")

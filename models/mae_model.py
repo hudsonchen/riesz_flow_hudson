@@ -248,7 +248,8 @@ class MAEResNetJAX(nn.Module):
         self.use_bf16 = bool(use_bf16)
         self.input_patch_size = int(input_patch_size)
 
-        self.dtype = torch.bfloat16 if (self.use_bf16 and torch.cuda.is_available()) else torch.float32
+        from utils.dist_util import accelerator_type
+        self.dtype = torch.bfloat16 if (self.use_bf16 and accelerator_type() != "cpu") else torch.float32
 
         enc_in_channels = self.in_channels * self.input_patch_size * self.input_patch_size
         self.encoder = _ResNetEncoder(

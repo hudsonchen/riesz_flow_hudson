@@ -1,0 +1,94 @@
+logging:
+  use_wandb: false
+  log_every_k: 10
+
+dataset:
+  resolution: 64
+  use_aug: false
+  use_latent: true
+  use_cache: false
+  num_classes: 1000
+  eval_split: train
+  batch_size: 256
+  eval_batch_size: 64
+  kwargs:
+    num_workers: 8
+    pin_memory: true
+    prefetch_factor: 2
+
+model:
+  cond_dim: 192
+  input_size: 8
+  in_channels: 4
+  patch_size: 2
+  hidden_size: 192
+  depth: 6
+  num_heads: 6
+  mlp_ratio: 4.0
+  out_channels: 4
+  use_qknorm: true
+  use_swiglu: true
+  use_rope: true
+  use_rmsnorm: true
+  n_cls_tokens: 4
+  noise_classes: 64
+  noise_coords: 8
+  use_bf16: true
+  attn_fp32: true
+
+optimizer:
+  lr_schedule:
+    learning_rate: 0.0002
+    warmup_steps: 500
+    lr_schedule: "const"
+    total_steps: 10000
+  weight_decay: 0.01
+  adam_b1: 0.9
+  adam_b2: 0.95
+
+train:
+  diverse_noise: true
+  train_batch_size: 8
+  seed: 42
+  total_steps: 10000
+  save_per_step: 2000
+  keep_every: 10000
+  eval_per_step: 1000000
+
+  pos_per_sample: 16
+  neg_per_sample: 8
+  positive_bank_size: 32
+  negative_bank_size: 256
+
+  push_per_step: 256
+  grad_accum_steps: 2
+  max_grad_norm: 2.0
+
+  forward_dict:
+    gen_per_label: 16
+    cfg_min: 1.0
+    cfg_max: 4.0
+    neg_cfg_pw: 3.0
+
+  activation_kwargs:
+    patch_mean_size: []
+    patch_std_size: []
+    use_std: false
+    use_mean: false
+    every_k_block: .inf
+
+  cfg_list: [1.0, 1.5, 2.0, 2.5]
+  ema_decay: 0.999
+
+  ot_mode: "none"
+  use_riesz: true
+
+  riesz_kwargs:
+    epsilon: 1.0e-6
+    use_sliced: true
+    num_projections: 256
+
+feature:
+  mae_path: "hf://mae_latent_256"
+  use_mae: true
+  use_convnext: false

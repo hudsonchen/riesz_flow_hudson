@@ -7,6 +7,7 @@ import numpy as np
 import torch
 from diffusers.models import AutoencoderKL
 from utils.env import VAE_HF_PATH
+from utils.dist_util import local_device
 
 _vae_cache = {}
 
@@ -23,7 +24,7 @@ def vae_enc_decode(replicate_params: bool = True):
     if cache_key in _vae_cache:
         return _vae_cache[cache_key]
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = local_device()
     vae = AutoencoderKL.from_pretrained(VAE_HF_PATH).to(device)
     vae.eval()
 

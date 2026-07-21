@@ -9,7 +9,7 @@ import torch
 from scipy import linalg
 
 from dataset.dataset import epoch0_sampler
-from utils.dist_util import process_allgather, process_count, process_index
+from utils.dist_util import local_device, process_allgather, process_count, process_index
 from utils.env import IMAGENET_FID_NPZ, IMAGENET_PR_NPZ, TORCH_HUB_DIR
 from utils.logging import is_rank_zero
 from tqdm import tqdm
@@ -59,7 +59,10 @@ class _InceptionWrap:
 def _get_inception() -> _InceptionWrap:
     global INCEPTION_NET
     if INCEPTION_NET is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # torch-fidelity only exposes CUDA/CPU placement. Keep FID on CPU when
+        # training on XPU; generated samples are already materialized as NumPy.
+        selected = local_device()
+        device = selected if selected.type == "cuda" else torch.device("cpu")
         INCEPTION_NET = _InceptionWrap(device)
     return INCEPTION_NET
 

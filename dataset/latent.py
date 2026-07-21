@@ -124,7 +124,8 @@ def create_cached_dataset(
     """
     from dataset.vae import vae_enc_decode
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    from utils.dist_util import local_device
+    device = local_device()
     encode_fn, _ = vae_enc_decode(replicate_params=False)
 
     Path(target_path).mkdir(parents=True, exist_ok=True)
