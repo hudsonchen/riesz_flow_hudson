@@ -11,6 +11,23 @@ from utils.logging import WandbLogger
 from utils.misc import EasyDict
 
 
+def resolve_training_steps(config, train_loader) -> tuple[int, int]:
+    """Resolve an epoch budget to optimizer steps for the current world size."""
+    local_batch_size = int(train_loader.batch_size)
+    push_per_step = int(config.train.get("push_per_step", 0))
+    loader_batches_per_step = max(1, math.ceil(push_per_step / local_batch_size))
+    if "num_epochs" not in config.train:
+        return int(config.train.total_steps), loader_batches_per_step
+
+    num_epochs = float(config.train.num_epochs)
+    if num_epochs <= 0:
+        raise ValueError(f"train.num_epochs must be positive, got {num_epochs}")
+
+    total_loader_batches = num_epochs * len(train_loader)
+    total_steps = max(1, math.ceil(total_loader_batches / loader_batches_per_step))
+    return total_steps, loader_batches_per_step
+
+
 def create_learning_rate_fn(
     learning_rate,
     warmup_steps,
@@ -54,7 +71,10 @@ def build_model_dict(config, model_class, *, workdir: str = "runs"):
     )
 
     print("Building dataset...")
-    batch_size_per_node = config.dataset.batch_size // process_count()
+    if "batch_size_per_gpu" in config.dataset:
+        batch_size_per_node = int(config.dataset.batch_size_per_gpu)
+    else:
+        batch_size_per_node = config.dataset.batch_size // process_count()
     resolution = int(config.dataset.resolution)
     use_aug = bool(config.dataset.get("use_aug", False))
     use_latent = bool(config.dataset.get("use_latent", False))
@@ -80,6 +100,16 @@ def build_model_dict(config, model_class, *, workdir: str = "runs"):
         split=eval_split,
         **config.dataset.kwargs,
     )
+
+    total_steps, loader_batches_per_step = resolve_training_steps(config, train_loader)
+    config.train.total_steps = total_steps
+    config.train.loader_batches_per_step = loader_batches_per_step
+    config.optimizer.lr_schedule.total_steps = total_steps
+    if "num_epochs" in config.train:
+        print(
+            f"Training for {config.train.num_epochs:g} epochs: {total_steps} optimizer steps "
+            f"({loader_batches_per_step} loader batches per step)."
+        )
 
     learning_rate_fn = create_learning_rate_fn(**config.optimizer.lr_schedule)
 

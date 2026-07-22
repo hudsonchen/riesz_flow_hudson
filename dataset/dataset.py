@@ -179,16 +179,17 @@ def get_postprocess_fn(*, use_aug: bool = False, use_latent: bool = False, use_c
 
 def infinite_sampler(it, start_step: int = 0):
     step_per_epoch = len(it)
-    epoch_idx = start_step // step_per_epoch
+    # DataLoader cannot jump to a batch offset: iterating past skipped batches
+    # still loads and preprocesses them. On online-VAE datasets that can make a
+    # resumed run appear stuck for almost a full epoch. Resume at the next
+    # epoch boundary instead, avoiding both that expensive replay and repeated
+    # training samples.
+    epoch_idx = (start_step + step_per_epoch - 1) // step_per_epoch
     it.sampler.set_epoch(epoch_idx)
-    skip_batches = start_step % step_per_epoch
     while True:
-        for i, batch in enumerate(it):
-            if skip_batches > 0 and i < skip_batches:
-                continue
+        for batch in it:
             image, label = batch
             yield (image, label)
-        skip_batches = 0
         epoch_idx += 1
         it.sampler.set_epoch(epoch_idx)
 

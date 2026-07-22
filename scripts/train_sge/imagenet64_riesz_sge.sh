@@ -4,7 +4,7 @@
 #$ -cwd
 #$ -V
 #$ -l gpu=true,gpu_type=h100
-#$ -pe gpu 8
+#$ -pe gpu 2
 #$ -l tmem=10G
 #$ -l h_rt=1:00:00
 #$ -R y
@@ -43,7 +43,7 @@ if [[ ! -f "$MAE_METADATA" ]]; then
   exit 1
 fi
 
-export NGPU=${NGPU:-8}
+export NGPU=${NGPU:-2}
 export MASTER_PORT=${MASTER_PORT:-6668}
 export CONFIG=${CONFIG:-configs/gen/imagenet64_riesz.yaml}
 export WORKDIR=${WORKDIR:-/SAN/intelsys/imagenet_mmd_flow/}

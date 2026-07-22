@@ -369,7 +369,9 @@ def train_gen(
     postprocess_fn,
     dataset_name="imagenet256",
     train_batch_size=0,
+    num_epochs=None,
     total_steps=100000,
+    loader_batches_per_step=1,
     save_per_step=10000,
     eval_per_step=5000,
     eval_samples=50000,
@@ -472,7 +474,9 @@ def train_gen(
     pbar = tqdm(range(step, total_steps), initial=step, total=total_steps) if is_rank_zero() else range(step, total_steps)
     memory_bank_positive = ArrayMemoryBank(num_classes=1000, max_size=positive_bank_size)
     memory_bank_negative = ArrayMemoryBank(num_classes=1, max_size=negative_bank_size)
-    train_iter = infinite_sampler(train_loader, step)
+    # Each optimizer step may refill the memory bank from multiple loader
+    # batches. Resume at the matching point in the epoch sequence.
+    train_iter = infinite_sampler(train_loader, step * loader_batches_per_step)
     _ot_kw = dict(ot_kwargs) if ot_kwargs else {}
 
     for step in pbar:
@@ -556,6 +560,8 @@ def train_gen(
         metrics["process_time"] = process_time
         metrics["kimg"] = (step + 1) * positive_samples.shape[0] / 1000.0
         metrics["forward_kimg"] = (step + 1) * positive_samples.shape[0] / 1000.0 * forward_dict["gen_per_label"]
+        completed_epochs = (step + 1) * loader_batches_per_step / max(1, len(train_loader))
+        metrics["epoch"] = min(float(num_epochs), completed_epochs) if num_epochs is not None else completed_epochs
         metrics.update(profile_metrics)
 
         logger.log_dict(metrics)
