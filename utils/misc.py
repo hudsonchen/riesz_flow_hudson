@@ -42,7 +42,15 @@ def load_config(config_path: str):
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"Config file not found: {config_path}")
     with open(config_path, "r", encoding="utf-8") as f:
-        return _dict_to_easydict(yaml.safe_load(f))
+        config = yaml.safe_load(f)
+
+    # Cluster launchers can tune DataLoader concurrency without maintaining a
+    # second YAML config solely for scheduler-specific resource settings.
+    num_workers = os.environ.get("WFLOW_NUM_WORKERS")
+    if num_workers is not None:
+        config.setdefault("dataset", {}).setdefault("kwargs", {})["num_workers"] = int(num_workers)
+
+    return _dict_to_easydict(config)
 
 
 def prepare_rng(seed_or_gen: int | torch.Generator | None, tags=("params", "dropout")):

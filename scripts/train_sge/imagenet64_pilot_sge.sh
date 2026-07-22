@@ -53,11 +53,22 @@ export DRIFT_COMPILE=${DRIFT_COMPILE:-0}
 export DRIFT_FEAT_CHUNK=${DRIFT_FEAT_CHUNK:-1}
 export NCCL_DEBUG=${NCCL_DEBUG:-WARN}
 
+# The CS GPU parallel environment does not reserve extra CPU slots. Control
+# CPU concurrency explicitly here instead. These values are per GPU process.
+export CPU_THREADS_PER_GPU=${CPU_THREADS_PER_GPU:-4}
+export WFLOW_NUM_WORKERS=${WFLOW_NUM_WORKERS:-8}
+export OMP_NUM_THREADS=${OMP_NUM_THREADS:-$CPU_THREADS_PER_GPU}
+export MKL_NUM_THREADS=${MKL_NUM_THREADS:-$CPU_THREADS_PER_GPU}
+export OPENBLAS_NUM_THREADS=${OPENBLAS_NUM_THREADS:-$CPU_THREADS_PER_GPU}
+export NUMEXPR_NUM_THREADS=${NUMEXPR_NUM_THREADS:-$CPU_THREADS_PER_GPU}
+
 echo "Job:        ${JOB_ID:-N/A}"
 echo "Node:       ${HOSTNAME:-N/A}"
 echo "SGE slots:  ${NSLOTS:-unknown}"
-echo "CPU cores:  $(nproc)"
+echo "CPU affinity: $(nproc) cores ($(nproc --all) on node)"
 echo "GPUs:       $NGPU"
+echo "CPU threads per GPU process: $CPU_THREADS_PER_GPU"
+echo "DataLoader workers per GPU:  $WFLOW_NUM_WORKERS"
 echo "Run name:   $RUN_NAME"
 echo "Config:     $CONFIG"
 echo "Workdir:    $WORKDIR"
