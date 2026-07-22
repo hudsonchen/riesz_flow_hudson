@@ -54,6 +54,8 @@ export NCCL_DEBUG=${NCCL_DEBUG:-WARN}
 
 echo "Job:        ${JOB_ID:-N/A}"
 echo "Node:       ${HOSTNAME:-N/A}"
+echo "SGE slots:  ${NSLOTS:-unknown}"
+echo "CPU cores:  $(nproc)"
 echo "GPUs:       $NGPU"
 echo "Config:     $CONFIG"
 echo "Workdir:    $WORKDIR"
