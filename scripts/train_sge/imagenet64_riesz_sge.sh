@@ -15,13 +15,31 @@ set -euo pipefail
 
 REPO_DIR=${RIESZ_FLOW_REPO_DIR:-/home/zongchen/riesz_flow_hudson}
 CONDA_ENV=${CONDA_ENV:-/home/zongchen/miniconda3/envs/mmd_flow_hudson}
+SHARED_WFLOW_CACHE=${SHARED_WFLOW_CACHE:-/home/zongchen/riesz_flow_hudson/.cache}
 
 cd "$REPO_DIR"
 export PATH="$CONDA_ENV/bin:$PATH"
 
+export WFLOW_VAE_HF_PATH=${WFLOW_VAE_HF_PATH:-$SHARED_WFLOW_CACHE/sdvae_hf_root}
+export WFLOW_DRIFTING_HF_ROOT=${WFLOW_DRIFTING_HF_ROOT:-$SHARED_WFLOW_CACHE/drifting_hf_root}
+export TORCH_HUB_DIR=${TORCH_HUB_DIR:-$SHARED_WFLOW_CACHE/torch_hub}
+export HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-1}
+export TRANSFORMERS_OFFLINE=${TRANSFORMERS_OFFLINE:-1}
+
 if [[ ! -f train.py ]]; then
   echo "Error: train.py was not found in repository directory: $REPO_DIR" >&2
   echo "Set RIESZ_FLOW_REPO_DIR if the repository is installed elsewhere." >&2
+  exit 1
+fi
+
+if [[ ! -f "$WFLOW_VAE_HF_PATH/config.json" ]]; then
+  echo "Error: SD-VAE config not found at $WFLOW_VAE_HF_PATH/config.json" >&2
+  exit 1
+fi
+
+MAE_METADATA="$WFLOW_DRIFTING_HF_ROOT/models/mae/jax/mae_latent_256/metadata.json"
+if [[ ! -f "$MAE_METADATA" ]]; then
+  echo "Error: latent MAE metadata not found at $MAE_METADATA" >&2
   exit 1
 fi
 
@@ -39,6 +57,8 @@ echo "GPUs:       $NGPU"
 echo "Config:     $CONFIG"
 echo "Workdir:    $WORKDIR"
 echo "Repository: $REPO_DIR"
+echo "VAE:        $WFLOW_VAE_HF_PATH"
+echo "MAE root:   $WFLOW_DRIFTING_HF_ROOT"
 
 torchrun \
   --nnodes=1 \

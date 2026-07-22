@@ -1,79 +1,50 @@
+from pathlib import Path
+
 from huggingface_hub import snapshot_download
-from utils.env import (
-    HF_REPO_ID, HF_ROOT, VAE_HF_PATH, TORCH_HUB_DIR, WFLOW_HF_REPO_ID, WFLOW_HF_ROOT,
-)
-import os
-import torch
 
 
-##################### Inference Related #####################
-"""
-Download Pretrained VAE
-"""
-repo_id = "stabilityai/sd-vae-ft-mse"
+# The previous downloader fetched the complete W-Flow checkpoint repository and
+# initialized the FID network in addition to downloading the training assets.
+# It is intentionally disabled for the ImageNet64 Riesz run:
+#
+# snapshot_download(repo_id="stabilityai/sd-vae-ft-mse", local_dir=VAE_HF_PATH)
+# snapshot_download(repo_id=WFLOW_HF_REPO_ID, local_dir=WFLOW_HF_ROOT)
+# create_feature_extractor("inception-v3-compat", ["2048", "logits_unbiased"], ...)
+# snapshot_download(repo_id=HF_REPO_ID, local_dir=HF_ROOT)
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+CACHE_ROOT = REPO_ROOT / ".cache"
+VAE_DIR = CACHE_ROOT / "sdvae_hf_root"
+MAE_DIR = CACHE_ROOT / "drifting_hf_root"
+
+
+print(f"Downloading SD-VAE to {VAE_DIR} ...")
 snapshot_download(
-    repo_id=repo_id,
-    local_dir=VAE_HF_PATH,
+    repo_id="stabilityai/sd-vae-ft-mse",
+    local_dir=VAE_DIR,
+    allow_patterns=[
+        "config.json",
+        "diffusion_pytorch_model.safetensors",
+    ],
 )
 
-print(f"Downloaded pretrained VAE weights from {repo_id} to {VAE_HF_PATH}")
-
-"""
-Download Pretrained W-Flow
-"""
+print(f"Downloading mae_latent_256 to {MAE_DIR} ...")
 snapshot_download(
-    repo_id=WFLOW_HF_REPO_ID,
-    local_dir=WFLOW_HF_ROOT,
+    repo_id="Goodeat/drifting",
+    local_dir=MAE_DIR,
+    allow_patterns=["models/mae/jax/mae_latent_256/*"],
 )
 
-print(f"Downloaded pretrained W-Flow weights from {WFLOW_HF_REPO_ID} to {WFLOW_HF_ROOT}")
+required_files = [
+    VAE_DIR / "config.json",
+    VAE_DIR / "diffusion_pytorch_model.safetensors",
+    MAE_DIR / "models/mae/jax/mae_latent_256/metadata.json",
+    MAE_DIR / "models/mae/jax/mae_latent_256/ema_params.msgpack",
+]
+missing = [path for path in required_files if not path.is_file()]
+if missing:
+    missing_text = "\n".join(f"  - {path}" for path in missing)
+    raise FileNotFoundError(f"Download finished with missing files:\n{missing_text}")
 
-
-##################### FID Calculation Related #####################
-"""
-Download Pretrained InceptionNet for FID calculation
-"""
-# Match utils/fid_util.py and utils/fidelity_wrapper.py
-os.makedirs(TORCH_HUB_DIR, exist_ok=True)
-torch.hub.set_dir(TORCH_HUB_DIR)
-
-from torch_fidelity.utils import create_feature_extractor
-
-from utils.dist_util import local_device
-
-device = local_device()
-fidelity_device = device if device.type == "cuda" else torch.device("cpu")
-
-# Match current repo:
-# - feature extractor: inception-v3-compat
-# - FID layer: 2048
-# - ISC layer: logits_unbiased
-fe = create_feature_extractor(
-    "inception-v3-compat",
-    ["2048", "logits_unbiased"],
-    cuda=(fidelity_device.type == "cuda"),
-)
-fe.eval()
-
-# torch-fidelity inception-v3-compat expects NCHW uint8 images in [0, 255].
-x = torch.zeros(1, 3, 256, 256, dtype=torch.uint8, device=fidelity_device)
-with torch.no_grad():
-    features_2048, logits = fe(x)
-print("Downloaded/loaded torch-fidelity Inception successfully.")
-print("torch hub dir:", torch.hub.get_dir())
-print("FID feature shape:", tuple(features_2048.shape))
-print("logits shape:", tuple(logits.shape))
-
-print(f"Downloaded pretrained InceptionNet for FID calculation to {TORCH_HUB_DIR}")
-
-
-##################### Training Related #####################
-"""
-Download Pretrained MAE from Drifting
-"""
-snapshot_download(
-    repo_id=HF_REPO_ID,
-    local_dir=HF_ROOT,
-)
-
-print(f"Downloaded pretrained MAE weights from {HF_REPO_ID} to {HF_ROOT}")
+print("SD-VAE and mae_latent_256 are ready.")
