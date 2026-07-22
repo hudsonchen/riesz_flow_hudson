@@ -17,7 +17,8 @@ from tqdm import tqdm
 from dataset.dataset import get_postprocess_fn, infinite_sampler
 from drift_loss import drift_loss
 from drift_loss_ot import drift_loss_ot
-from riesz_loss import riesz_loss
+from riesz_loss import riesz_loss as direct_riesz_loss
+from riesz_loss_sliced import riesz_loss as sliced_riesz_loss
 from memory_bank import ArrayMemoryBank
 from models.mae_model import build_activation_function
 from utils.ckpt_util import restore_checkpoint, save_checkpoint, save_params_ema_artifact
@@ -125,6 +126,10 @@ def train_step(
     n_pos = samples.shape[1]
     n_gen = int(gen_per_label)
     n_uncond = negative_samples.shape[1]
+
+    riesz_loss_fn = direct_riesz_loss
+    if bool((riesz_kwargs or {}).get("use_sliced", False)):
+        riesz_loss_fn = sliced_riesz_loss
 
     uncond_w = (cfg - 1.0) * (n_gen - 1) / max(1, n_uncond)
 
@@ -237,7 +242,7 @@ def train_step(
                         f=feature_repeats,
                         k=n_uncond,
                     )
-                    loss_feat, info = riesz_loss(
+                    loss_feat, info = riesz_loss_fn(
                         gen=feature_gen,
                         fixed_pos=feature_pos,
                         fixed_neg=feature_uncond,
