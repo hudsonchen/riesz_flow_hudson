@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#$ -N imagenet64_riesz
+#$ -N imagenet64_sliced_riesz
 #$ -P aihub_ucl
 #$ -cwd
 #$ -V
@@ -45,9 +45,9 @@ if [[ ! -f "$MAE_METADATA" ]]; then
 fi
 
 export NGPU=${NGPU:-2}
-export MASTER_PORT=${MASTER_PORT:-6668}
-export CONFIG=${CONFIG:-configs/gen/imagenet64_riesz.yaml}
-export WORKDIR=${WORKDIR:-/SAN/intelsys/imagenet_mmd_flow/}
+export MASTER_PORT=${MASTER_PORT:-6669}
+export CONFIG=${CONFIG:-configs/gen/imagenet64_sliced_riesz.yaml}
+export WORKDIR=${WORKDIR:-/SAN/intelsys/imagenet_mmd_flow_sliced_riesz/}
 export DRIFT_COMPILE=${DRIFT_COMPILE:-0}
 export DRIFT_FEAT_CHUNK=${DRIFT_FEAT_CHUNK:-1}
 export NCCL_DEBUG=${NCCL_DEBUG:-WARN}

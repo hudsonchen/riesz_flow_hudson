@@ -9,7 +9,7 @@ dataset:
   use_cache: false
   num_classes: 1000
   eval_split: train
-  batch_size: 256
+  batch_size_per_gpu: 256
   eval_batch_size: 64
   kwargs:
     num_workers: 8
@@ -41,7 +41,6 @@ optimizer:
     learning_rate: 0.0002
     warmup_steps: 500
     lr_schedule: "const"
-    total_steps: 10000
   weight_decay: 0.01
   adam_b1: 0.9
   adam_b2: 0.95
@@ -50,39 +49,41 @@ train:
   diverse_noise: true
   train_batch_size: 8
   seed: 42
-  total_steps: 10000
-  save_per_step: 2000
-  keep_every: 10000
-  eval_per_step: 1000000
-
+  num_epochs: 50
+  save_per_step: 500
+  keep_every: 2500
+  eval_per_step: 500
+  eval_samples: 64
+  sanity_samples: 64
+  eval_fid: false
+  eval_isc: false
+  eval_prc_recall: false
   pos_per_sample: 16
   neg_per_sample: 8
   positive_bank_size: 32
   negative_bank_size: 256
-
-  push_per_step: 256
-  grad_accum_steps: 2
-  max_grad_norm: 2.0
-
   forward_dict:
     gen_per_label: 16
     cfg_min: 1.0
     cfg_max: 4.0
     neg_cfg_pw: 3.0
-
   activation_kwargs:
     patch_mean_size: []
     patch_std_size: []
     use_std: false
     use_mean: false
     every_k_block: .inf
-
   cfg_list: [1.0, 1.5, 2.0, 2.5]
   ema_decay: 0.999
+  push_per_step: 256
+  # Refill one normal batch after restoring a checkpoint. The old default of
+  # 3000 batches looked like a freeze when latents were encoded online.
+  push_at_resume: 1
+  grad_accum_steps: 2
+  max_grad_norm: 2.0
 
   ot_mode: "none"
   use_riesz: true
-
   riesz_kwargs:
     epsilon: 1.0e-6
     use_sliced: true
