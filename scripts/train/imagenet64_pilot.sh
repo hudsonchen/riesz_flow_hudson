@@ -5,7 +5,8 @@ NGPU=${NGPU:-1}
 
 MASTER_PORT=${MASTER_PORT:-6667}
 CONFIG=configs/gen/imagenet64_pilot.yaml
-WORKDIR=${WORKDIR:-runs/imagenet64_pilot}
+RUN_NAME=${RUN_NAME:-imagenet64_mmd_ot_debiased_r0p05_sink10_lr2e-4_trainbs8_pos16_neg8_gen16_acc2}
+WORKDIR=${WORKDIR:-runs/$RUN_NAME}
 
 # Compilation of the full multi-scale MAE/Sinkhorn graph can be slow and has
 # triggered illegal CUDA accesses on some consumer GPUs. Enable it explicitly

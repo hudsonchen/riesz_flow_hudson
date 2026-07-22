@@ -47,7 +47,8 @@ fi
 export NGPU=${NGPU:-2}
 export MASTER_PORT=${MASTER_PORT:-6669}
 export CONFIG=${CONFIG:-configs/gen/imagenet64_sliced_riesz.yaml}
-export WORKDIR=${WORKDIR:-/SAN/intelsys/imagenet_mmd_flow_sliced_riesz/}
+export RUN_NAME=${RUN_NAME:-imagenet64_sliced_riesz_proj128_eps1e-6_lr2e-4_trainbs8_pos16_neg8_gen16_acc2}
+export WORKDIR=${WORKDIR:-/SAN/intelsys/imagenet64/$RUN_NAME}
 export DRIFT_COMPILE=${DRIFT_COMPILE:-0}
 export DRIFT_FEAT_CHUNK=${DRIFT_FEAT_CHUNK:-1}
 export NCCL_DEBUG=${NCCL_DEBUG:-WARN}
@@ -57,6 +58,7 @@ echo "Node:       ${HOSTNAME:-N/A}"
 echo "SGE slots:  ${NSLOTS:-unknown}"
 echo "CPU cores:  $(nproc)"
 echo "GPUs:       $NGPU"
+echo "Run name:   $RUN_NAME"
 echo "Config:     $CONFIG"
 echo "Workdir:    $WORKDIR"
 echo "Repository: $REPO_DIR"

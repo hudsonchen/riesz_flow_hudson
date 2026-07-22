@@ -5,7 +5,8 @@ NGPU=${NGPU:-1}
 
 MASTER_PORT=${MASTER_PORT:-6668}
 CONFIG=configs/gen/imagenet64_sliced_riesz.yaml
-WORKDIR=${WORKDIR:-runs/imagenet64_sliced_riesz_pilot_direct}
+RUN_NAME=${RUN_NAME:-imagenet64_sliced_riesz_proj128_eps1e-6_lr2e-4_trainbs8_pos16_neg8_gen16_acc2}
+WORKDIR=${WORKDIR:-runs/$RUN_NAME}
 
 DRIFT_COMPILE=${DRIFT_COMPILE:-0} \
 DRIFT_FEAT_CHUNK=${DRIFT_FEAT_CHUNK:-1} \

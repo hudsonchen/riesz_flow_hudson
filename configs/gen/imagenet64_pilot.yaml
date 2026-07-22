@@ -13,7 +13,7 @@ dataset:
   # The local ILSVRC validation images are flat rather than class-organized.
   # Reuse the class-organized training split only for periodic sample previews.
   eval_split: train
-  batch_size: 256
+  batch_size_per_gpu: 256
   eval_batch_size: 64
   kwargs:
     num_workers: 8
@@ -47,7 +47,6 @@ optimizer:
     learning_rate: 0.0002
     warmup_steps: 500
     lr_schedule: "const"
-    total_steps: 10000
   weight_decay: 0.01
   adam_b1: 0.9
   adam_b2: 0.95
@@ -56,7 +55,7 @@ train:
   diverse_noise: true
   train_batch_size: 8
   seed: 42
-  total_steps: 10000
+  num_epochs: 50
   save_per_step: 500
   keep_every: 2500
   eval_per_step: 500
@@ -90,6 +89,9 @@ train:
   cfg_list: [1.0, 1.5, 2.0, 2.5]
   ema_decay: 0.999
   push_per_step: 256
+  # Refill one normal batch after restoring a checkpoint. The old default of
+  # 3000 batches looked like a freeze when latents were encoded online.
+  push_at_resume: 1
   grad_accum_steps: 2
   max_grad_norm: 2.0
 
