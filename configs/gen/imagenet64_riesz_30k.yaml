@@ -41,7 +41,7 @@ optimizer:
     learning_rate: 0.0002
     warmup_steps: 500
     lr_schedule: "const"
-    total_steps: 10000
+    total_steps: 30000
   weight_decay: 0.01
   adam_b1: 0.9
   adam_b2: 0.95
@@ -50,7 +50,7 @@ train:
   diverse_noise: true
   train_batch_size: 8
   seed: 42
-  total_steps: 10000
+  total_steps: 30000
   save_per_step: 500
   keep_every: 2500
   eval_per_step: 500

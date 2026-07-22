@@ -1,7 +1,6 @@
 logging:
   use_wandb: false
   log_every_k: 10
-
 dataset:
   resolution: 64
   use_aug: false
@@ -15,7 +14,6 @@ dataset:
     num_workers: 8
     pin_memory: true
     prefetch_factor: 2
-
 model:
   cond_dim: 192
   input_size: 8
@@ -35,22 +33,20 @@ model:
   noise_coords: 8
   use_bf16: true
   attn_fp32: true
-
 optimizer:
   lr_schedule:
     learning_rate: 0.0002
     warmup_steps: 500
-    lr_schedule: "const"
-    total_steps: 10000
+    lr_schedule: const
+    total_steps: 30000
   weight_decay: 0.01
   adam_b1: 0.9
   adam_b2: 0.95
-
 train:
   diverse_noise: true
   train_batch_size: 8
   seed: 42
-  total_steps: 10000
+  total_steps: 30000
   save_per_step: 500
   keep_every: 2500
   eval_per_step: 500
@@ -74,18 +70,26 @@ train:
     use_std: false
     use_mean: false
     every_k_block: .inf
-  cfg_list: [1.0, 1.5, 2.0, 2.5]
+  cfg_list:
+  - 1.0
+  - 1.5
+  - 2.0
+  - 2.5
   ema_decay: 0.999
   push_per_step: 256
   grad_accum_steps: 2
   max_grad_norm: 2.0
-
-  ot_mode: "none"
-  use_riesz: true
-  riesz_kwargs:
-    epsilon: 1.0e-6
-
+  ot_mode: none
+  use_riesz: false
+  use_gaussian: true
+  gaussian_kwargs:
+    total_steps: 20000
+    initial_multiplier: 2.0
+    final_multiplier: 1.25
+    schedule: cosine
+    epsilon: 1.0e-06
+    loss_scale: 1.0
 feature:
-  mae_path: "hf://mae_latent_256"
+  mae_path: hf://mae_latent_256
   use_mae: true
   use_convnext: false
