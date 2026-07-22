@@ -13,8 +13,7 @@ from huggingface_hub import snapshot_download
 # snapshot_download(repo_id=HF_REPO_ID, local_dir=HF_ROOT)
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-CACHE_ROOT = REPO_ROOT / ".cache"
+CACHE_ROOT = Path("/SAN/intelsys/imagenet_mmd_flow/cache")
 VAE_DIR = CACHE_ROOT / "sdvae_hf_root"
 MAE_DIR = CACHE_ROOT / "drifting_hf_root"
 
