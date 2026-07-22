@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 #$ -N imagenet64_riesz
+#$ -P aihub_ucl
 #$ -cwd
 #$ -V
 #$ -l gpu=true,gpu_type=h100
@@ -8,15 +9,21 @@
 #$ -l h_rt=1:00:00
 #$ -R y
 #$ -j y
+#$ -o /home/zongchen/
 
 set -euo pipefail
 
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-REPO_DIR=${W_FLOW_REPO_DIR:-$(cd -- "$SCRIPT_DIR/../.." && pwd)}
+REPO_DIR=${RIESZ_FLOW_REPO_DIR:-/home/zongchen/riesz_flow_hudson}
 CONDA_ENV=${CONDA_ENV:-/home/zongchen/miniconda3/envs/mmd_flow_hudson}
 
 cd "$REPO_DIR"
 export PATH="$CONDA_ENV/bin:$PATH"
+
+if [[ ! -f train.py ]]; then
+  echo "Error: train.py was not found in repository directory: $REPO_DIR" >&2
+  echo "Set RIESZ_FLOW_REPO_DIR if the repository is installed elsewhere." >&2
+  exit 1
+fi
 
 export NGPU=${NGPU:-8}
 export MASTER_PORT=${MASTER_PORT:-6668}
@@ -34,9 +41,9 @@ echo "Workdir:    $WORKDIR"
 echo "Repository: $REPO_DIR"
 
 torchrun \
-  --standalone \
   --nnodes=1 \
   --nproc_per_node="$NGPU" \
+  --master_addr=127.0.0.1 \
   --master_port="$MASTER_PORT" \
   train.py \
   --config "$CONFIG" \
