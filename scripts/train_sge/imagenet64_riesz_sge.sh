@@ -14,11 +14,12 @@
 set -euo pipefail
 
 REPO_DIR=${RIESZ_FLOW_REPO_DIR:-/home/zongchen/riesz_flow_hudson}
-CONDA_ENV=${CONDA_ENV:-/home/zongchen/miniconda3/envs/mmd_flow_hudson}
 SHARED_WFLOW_CACHE=${SHARED_WFLOW_CACHE:-/home/zongchen/riesz_flow_hudson/.cache}
 
+eval "$(/home/zongchen/miniconda3/condabin/conda shell.bash hook)"
+conda activate mmd_flow
+
 cd "$REPO_DIR"
-export PATH="$CONDA_ENV/bin:$PATH"
 
 export WFLOW_VAE_HF_PATH=${WFLOW_VAE_HF_PATH:-$SHARED_WFLOW_CACHE/sdvae_hf_root}
 export WFLOW_DRIFTING_HF_ROOT=${WFLOW_DRIFTING_HF_ROOT:-$SHARED_WFLOW_CACHE/drifting_hf_root}
