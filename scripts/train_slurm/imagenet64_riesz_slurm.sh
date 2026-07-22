@@ -13,7 +13,8 @@
 
 set -euo pipefail
 
-REPO_DIR=${REPO_DIR:-/home/zongchen/mmd_flow_hudson/W-Flow}
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+REPO_DIR=${REPO_DIR:-$(cd -- "$SCRIPT_DIR/../.." && pwd)}
 CONDA_ENV=${CONDA_ENV:-/home/zongchen/miniconda3/envs/mmd_flow_hudson}
 
 cd "$REPO_DIR"
