@@ -131,7 +131,19 @@ def calculate_metrics(**kwargs) -> dict:
 
             ref_path = url_to_path(input2)
             x = np.load(ref_path)
-            fid_stats_2 = {"mu": x["mu"], "sigma": x["sigma"]}
+            # torch-fidelity 0.4 computes the feature mean in the extractor's
+            # dtype (normally float32), while standard OpenAI reference batches
+            # store both FID statistics as float64.  Its metric helper requires
+            # exact dtype equality, so normalize both sides to the customary
+            # double precision used for the covariance/FID calculation.
+            fid_stats_1 = {
+                "mu": np.asarray(fid_stats_1["mu"], dtype=np.float64),
+                "sigma": np.asarray(fid_stats_1["sigma"], dtype=np.float64),
+            }
+            fid_stats_2 = {
+                "mu": np.asarray(x["mu"], dtype=np.float64),
+                "sigma": np.asarray(x["sigma"], dtype=np.float64),
+            }
             metric_fid = fid_statistics_to_metric(
                 fid_stats_1, fid_stats_2, get_kwarg("verbose", kwargs)
             )
