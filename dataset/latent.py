@@ -179,30 +179,35 @@ def create_cached_dataset(
         )
 
         write_idx = 0
-        for step, (images, labels) in tqdm(
-            enumerate(loader), total=len(loader), desc=f"encode:{split}",
-        ):
-            images = images.to(device)
+        with tqdm(
+            total=n_samples,
+            desc=f"encode:{split}",
+            unit="image",
+            dynamic_ncols=True,
+        ) as progress:
+            for step, (images, labels) in enumerate(loader):
+                images = images.to(device)
 
-            with torch.no_grad():
-                # Use identical RNG state for both normal and flipped encode
-                # to match JAX's functional RNG semantics (same noise for both).
-                rng = torch.Generator(device=device)
-                rng.manual_seed(step)
-                latents = encode_fn(images, rng=rng).detach().cpu().numpy()
+                with torch.no_grad():
+                    # Use identical RNG state for both normal and flipped encode
+                    # to match JAX's functional RNG semantics (same noise for both).
+                    rng = torch.Generator(device=device)
+                    rng.manual_seed(step)
+                    latents = encode_fn(images, rng=rng).detach().cpu().numpy()
 
-                rng_flip = torch.Generator(device=device)
-                rng_flip.manual_seed(step)
-                latents_flip = encode_fn(
-                    torch.flip(images, dims=(3,)), rng=rng_flip
-                ).detach().cpu().numpy()
+                    rng_flip = torch.Generator(device=device)
+                    rng_flip.manual_seed(step)
+                    latents_flip = encode_fn(
+                        torch.flip(images, dims=(3,)), rng=rng_flip
+                    ).detach().cpu().numpy()
 
-            bs = latents.shape[0]
-            end_idx = write_idx + bs
-            mm_moments[write_idx:end_idx] = latents
-            mm_flip[write_idx:end_idx] = latents_flip
-            mm_targets[write_idx:end_idx] = labels.numpy().astype(np.int64)
-            write_idx = end_idx
+                bs = latents.shape[0]
+                end_idx = write_idx + bs
+                mm_moments[write_idx:end_idx] = latents
+                mm_flip[write_idx:end_idx] = latents_flip
+                mm_targets[write_idx:end_idx] = labels.numpy().astype(np.int64)
+                write_idx = end_idx
+                progress.update(bs)
 
         mm_moments.flush()
         mm_flip.flush()
