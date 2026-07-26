@@ -12,6 +12,22 @@ WORKDIR=${WORKDIR:-runs/$RUN_NAME}
 DRIFT_COMPILE=${DRIFT_COMPILE:-0}
 DRIFT_FEAT_CHUNK=${DRIFT_FEAT_CHUNK:-1}
 
+if [[ -n "${WFLOW_CACHE_ROOT:-}" ]]; then
+  CACHE_ROOT=$WFLOW_CACHE_ROOT
+else
+  case "$(id -un)" in
+    rc-chen1)
+      CACHE_ROOT="$HOME/rds/rds-airr-p109-tfgYl93jDnM/cache"
+      ;;
+    zongchen)
+      CACHE_ROOT=/SAN/intelsys/imagenet_mmd_flow/cache
+      ;;
+    *)
+      CACHE_ROOT="$REPO_DIR/.cache"
+      ;;
+  esac
+fi
+
 if [[ ! -f "$CONFIG" ]]; then
   echo "Error: config not found: $CONFIG" >&2
   exit 1
@@ -21,7 +37,9 @@ echo "GPUs:       $NGPU"
 echo "Config:     $CONFIG"
 echo "Workdir:    $WORKDIR"
 echo "Repository: $REPO_DIR"
+echo "Cache:      $CACHE_ROOT"
 
+WFLOW_CACHE_ROOT="$CACHE_ROOT" \
 DRIFT_COMPILE="$DRIFT_COMPILE" \
 DRIFT_FEAT_CHUNK="$DRIFT_FEAT_CHUNK" \
 NCCL_DEBUG="${NCCL_DEBUG:-WARN}" \
