@@ -1,4 +1,4 @@
-########### misc/download_pretrained.py ###########
+########### misc/download.py ###########
 # Download pretrained W-Flow checkpoint and SD-VAE weights for inference
 # Download InceptionNet for FID eval
 # Download pretrained MAE weights for training
@@ -10,7 +10,7 @@
 # 3. Specify the path to the pretrained MAE weights:
 # "HF_ROOT" in utils/env.py
 # 4. Run the following code to download them all:
-python misc/download_pretrained.py
+python misc/download.py
 
 ########### dataset/latent.py ###########
 # 1. Download imagenet-1k and specify the path "IMAGENET_PATH" in utils/env.py

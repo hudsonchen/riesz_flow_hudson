@@ -174,7 +174,7 @@ IMAGENET_PR_NPZ = "/path/to/imagenet_val_prc_arr0.npz"
 Then download model assets:
 
 ```bash
-python misc/download_pretrained.py
+python misc/download.py
 ```
 
 This downloads:

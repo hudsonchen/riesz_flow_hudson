@@ -1,27 +1,85 @@
-from __future__ import annotations
-
-import getpass
-import os
+import sys
 from pathlib import Path
+from urllib.request import urlretrieve
 
+import torch
+from huggingface_hub import snapshot_download
+from torch_fidelity.utils import create_feature_extractor
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-_USER_CACHE = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "w-flow"
-_CACHE_BY_USER = {
-    "rc-chen1": Path("/home/rc-chen1/rds/rds-airr-p109-tfgYl93jDnM/cache"),
-    "zongchen": REPO_ROOT / ".cache",
-}
-CACHE_ROOT = Path(
-    os.environ.get("WFLOW_CACHE_ROOT", _CACHE_BY_USER.get(getpass.getuser(), _USER_CACHE))
-).expanduser()
+sys.path.insert(0, str(REPO_ROOT))
 
-HF_ROOT = os.environ.get("WFLOW_DRIFTING_HF_ROOT", str(CACHE_ROOT / "drifting_hf_root"))
-VAE_HF_PATH = os.environ.get("WFLOW_VAE_HF_PATH", str(CACHE_ROOT / "sdvae_hf_root"))
-TORCH_HUB_DIR = os.environ.get("TORCH_HUB_DIR", str(CACHE_ROOT / "torch_hub"))
-WFLOW_HF_ROOT = os.environ.get("WFLOW_HF_ROOT", str(CACHE_ROOT / "wflow_hf_root"))
-IMAGENET_CACHE_PATH = os.environ.get(
-    "IMAGENET_CACHE_PATH", str(CACHE_ROOT / "imagenet256-latents-sdvae")
+from utils.env import (  # noqa: E402
+    HF_ROOT,
+    IMAGENET_FID_NPZ,
+    TORCH_HUB_DIR,
+    VAE_HF_PATH,
 )
-IMAGENET_FID_NPZ = os.environ.get(
-    "IMAGENET_FID_NPZ", str(Path(WFLOW_HF_ROOT) / "stats/jit_in256_stats.npz")
+
+VAE_DIR = Path(VAE_HF_PATH)
+MAE_DIR = Path(HF_ROOT)
+FID_STATS_PATH = Path(IMAGENET_FID_NPZ)
+TORCH_HUB_PATH = Path(TORCH_HUB_DIR)
+
+VAE_REQUIRED = [
+    VAE_DIR / "config.json",
+    VAE_DIR / "diffusion_pytorch_model.safetensors",
+]
+if all(path.is_file() for path in VAE_REQUIRED):
+    print(f"Using existing SD-VAE at {VAE_DIR}.")
+else:
+    print(f"Downloading SD-VAE to {VAE_DIR} ...")
+    snapshot_download(
+        repo_id="stabilityai/sd-vae-ft-mse",
+        local_dir=VAE_DIR,
+        allow_patterns=[
+            "config.json",
+            "diffusion_pytorch_model.safetensors",
+        ],
+    )
+
+MAE_REQUIRED = [
+    MAE_DIR / "models/mae/jax/mae_latent_256/metadata.json",
+    MAE_DIR / "models/mae/jax/mae_latent_256/ema_params.msgpack",
+]
+if all(path.is_file() for path in MAE_REQUIRED):
+    print(f"Using existing mae_latent_256 at {MAE_DIR}.")
+else:
+    print(f"Downloading mae_latent_256 to {MAE_DIR} ...")
+    snapshot_download(
+        repo_id="Goodeat/drifting",
+        local_dir=MAE_DIR,
+        allow_patterns=["models/mae/jax/mae_latent_256/*"],
+    )
+
+if FID_STATS_PATH.is_file():
+    print(f"Using existing ImageNet-256 FID statistics at {FID_STATS_PATH}.")
+else:
+    print(f"Downloading ImageNet-256 FID statistics to {FID_STATS_PATH} ...")
+    FID_STATS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    urlretrieve(
+        "https://raw.githubusercontent.com/LTH14/JiT/main/fid_stats/jit_in256_stats.npz",
+        FID_STATS_PATH,
+    )
+
+print(f"Downloading torch-fidelity Inception network to {TORCH_HUB_PATH} ...")
+TORCH_HUB_PATH.mkdir(parents=True, exist_ok=True)
+torch.hub.set_dir(str(TORCH_HUB_PATH))
+create_feature_extractor(
+    "inception-v3-compat",
+    ["2048", "logits_unbiased"],
+    cuda=False,
 )
+
+required_files = [
+    *VAE_REQUIRED,
+    *MAE_REQUIRED,
+    FID_STATS_PATH,
+    TORCH_HUB_PATH / "checkpoints/weights-inception-2015-12-05-6726825d.pth",
+]
+missing = [path for path in required_files if not path.is_file()]
+if missing:
+    missing_text = "\n".join(f"  - {path}" for path in missing)
+    raise FileNotFoundError(f"Download finished with missing files:\n{missing_text}")
+
+print("SD-VAE, mae_latent_256, and ImageNet-256 FID assets are ready.")
