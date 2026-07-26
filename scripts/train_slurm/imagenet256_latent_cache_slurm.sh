@@ -17,9 +17,9 @@ set -euo pipefail
 
 module purge
 module load rhel9/default-dawn
+module load intelpython-conda
 
 # Activate the existing environment.
-source "${HOME}/.conda/etc/profile.d/conda.sh"
 conda activate mmd_flow
 
 cd /home/rc-chen1/riesz_flow_hudson
