@@ -89,6 +89,6 @@ train:
     epsilon: 1.0e-6
 
 feature:
-  mae_path: "hf://mae_latent_256"
+  mae_path: "hf://mae_latent_640"
   use_mae: true
   use_convnext: false

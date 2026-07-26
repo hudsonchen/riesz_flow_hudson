@@ -1,45 +1,89 @@
-#!/usr/bin/env bash
+#!/bin/bash -l
 #SBATCH --job-name=imagenet256_latents
 #SBATCH --account=airr-p109-dawn-gpu
 #SBATCH --partition=pvc9
+
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=8
-#SBATCH --gpus-per-node=1
-#SBATCH --mem=64G
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=24
+#SBATCH --gres=gpu:1
+#SBATCH --mem=128G
 #SBATCH --time=24:00:00
+
 #SBATCH --output=%x-%j.out
 #SBATCH --error=%x-%j.err
 
 set -euo pipefail
 
-REPO_DIR=${REPO_DIR:-${SLURM_SUBMIT_DIR:-$PWD}}
-PYTHON=${PYTHON:-python}
+module purge
+module load rhel9/default-dawn
 
-DATA_PATH=${DATA_PATH:-/home/rc-chen1/rds/rds-airr-p109-tfgYl93jDnM/ILSVRC/Data/CLS-LOC/}
-TARGET_PATH=${TARGET_PATH:-/home/rc-chen1/rds/rds-airr-p109-tfgYl93jDnM/cache/drifting_hf_root/models/mae/jax/mae_latent_256/imagenet256-latents-sdvae}
-LOCAL_BATCH_SIZE=${LOCAL_BATCH_SIZE:-128}
-NUM_WORKERS=${NUM_WORKERS:-8}
+# Activate the existing environment.
+source "${HOME}/.conda/etc/profile.d/conda.sh"
+conda activate mmd_flow
 
-cd "$REPO_DIR"
+cd /home/rc-chen1/riesz_flow_hudson
 
-if [[ ! -f dataset/latent.py ]]; then
-  echo "Error: dataset/latent.py was not found in repository: $REPO_DIR" >&2
-  echo "Submit from the W-Flow checkout or set REPO_DIR." >&2
-  exit 1
-fi
+export WFLOW_CACHE_ROOT=/home/rc-chen1/rds/rds-airr-p109-tfgYl93jDnM/cache
+export PYTHONUNBUFFERED=1
 
-echo "Job:         ${SLURM_JOB_ID:-N/A}"
-echo "Node:        ${HOSTNAME:-N/A}"
-echo "Repository:  $REPO_DIR"
-echo "Data:        $DATA_PATH"
-echo "Target:      $TARGET_PATH"
-echo "Batch size:  $LOCAL_BATCH_SIZE"
-echo "Workers:     $NUM_WORKERS"
+# Prevent each DataLoader worker from spawning many CPU threads.
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
 
-"$PYTHON" -m dataset.latent \
-  --data-path "$DATA_PATH" \
-  --target-path "$TARGET_PATH" \
-  --local-batch-size "$LOCAL_BATCH_SIZE" \
-  --num-workers "$NUM_WORKERS" \
-  --pin-memory
+DATA_ROOT=/home/rc-chen1/rds/rds-airr-p109-tfgYl93jDnM/ILSVRC/Data/CLS-LOC
+TARGET_ROOT="${WFLOW_CACHE_ROOT}/imagenet256-latents-sdvae"
+VAE_ROOT="${WFLOW_CACHE_ROOT}/sdvae_hf_root"
+
+# Preflight checks.
+test -d "${DATA_ROOT}/train" || {
+    echo "Missing ImageNet train directory: ${DATA_ROOT}/train"
+    exit 1
+}
+
+test -d "${DATA_ROOT}/val" || {
+    echo "Missing ImageNet val directory: ${DATA_ROOT}/val"
+    exit 1
+}
+
+test -f "${VAE_ROOT}/config.json" || {
+    echo "Missing SD-VAE config: ${VAE_ROOT}/config.json"
+    exit 1
+}
+
+test -f "${VAE_ROOT}/diffusion_pytorch_model.safetensors" || {
+    echo "Missing SD-VAE weights: ${VAE_ROOT}/diffusion_pytorch_model.safetensors"
+    exit 1
+}
+
+mkdir -p "${TARGET_ROOT}"
+
+echo "Host:        $(hostname)"
+echo "Start time:  $(date)"
+echo "Data root:   ${DATA_ROOT}"
+echo "Target root: ${TARGET_ROOT}"
+echo "VAE root:    ${VAE_ROOT}"
+echo "CPUs:        ${SLURM_CPUS_PER_TASK}"
+
+python - <<'PY'
+from utils.env import VAE_HF_PATH, IMAGENET_CACHE_PATH
+from utils.dist_util import local_device
+
+print("VAE_HF_PATH        =", VAE_HF_PATH)
+print("IMAGENET_CACHE_PATH=", IMAGENET_CACHE_PATH)
+print("Device             =", local_device())
+PY
+
+srun python -u -m dataset.latent \
+    --data-path "${DATA_ROOT}" \
+    --target-path "${TARGET_ROOT}" \
+    --local-batch-size 128 \
+    --num-workers 16 \
+    --prefetch-factor 2 \
+    --pin-memory
+
+echo "End time: $(date)"
+
+ls -lh "${TARGET_ROOT}"
