@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=imagenet256_latents
+#SBATCH --account=airr-p109-dawn-gpu
+#SBATCH --partition=pvc9
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8
