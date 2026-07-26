@@ -20,7 +20,11 @@ module load rhel9/default-dawn
 module load intelpython-conda
 
 # Activate the existing environment.
+# Intel oneAPI conda deactivate hooks can reference unset vars; keep strict mode
+# for this script, but relax nounset while activation/deactivation hooks run.
+set +u
 conda activate mmd_flow
+set -u
 
 cd /home/rc-chen1/riesz_flow_hudson
 
