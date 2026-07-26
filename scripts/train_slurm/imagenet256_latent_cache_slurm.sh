@@ -15,14 +15,14 @@
 
 set -euo pipefail
 
+# Intel oneAPI module/conda hooks can reference unset variables. Relax nounset
+# only while those external shell hooks run, then restore strict mode.
+set +u
 module purge
 module load rhel9/default-dawn
 module load intelpython-conda
 
 # Activate the existing environment.
-# Intel oneAPI conda deactivate hooks can reference unset vars; keep strict mode
-# for this script, but relax nounset while activation/deactivation hooks run.
-set +u
 conda activate mmd_flow
 set -u
 
