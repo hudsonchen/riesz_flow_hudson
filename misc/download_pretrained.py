@@ -1,10 +1,20 @@
-import getpass
+import sys
 from pathlib import Path
 from urllib.request import urlretrieve
 
 import torch
 from huggingface_hub import snapshot_download
 from torch_fidelity.utils import create_feature_extractor
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
+
+from misc.download import (  # noqa: E402
+    HF_ROOT,
+    IMAGENET_FID_NPZ,
+    TORCH_HUB_DIR,
+    VAE_HF_PATH,
+)
 
 
 # The previous downloader fetched the complete W-Flow checkpoint repository and
@@ -17,16 +27,10 @@ from torch_fidelity.utils import create_feature_extractor
 # snapshot_download(repo_id=HF_REPO_ID, local_dir=HF_ROOT)
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-CACHE_ROOT = (
-    Path("/home/rc-chen1/rds/rds-airr-p109-tfgYl93jDnM/cache")
-    if getpass.getuser() == "rc-chen1"
-    else REPO_ROOT / ".cache"
-)
-VAE_DIR = CACHE_ROOT / "sdvae_hf_root"
-MAE_DIR = CACHE_ROOT / "drifting_hf_root"
-WFLOW_DIR = CACHE_ROOT / "wflow_hf_root"
-TORCH_HUB_DIR = CACHE_ROOT / "torch_hub"
+VAE_DIR = Path(VAE_HF_PATH)
+MAE_DIR = Path(HF_ROOT)
+FID_STATS_PATH = Path(IMAGENET_FID_NPZ)
+TORCH_HUB_PATH = Path(TORCH_HUB_DIR)
 
 
 VAE_REQUIRED = [
@@ -60,7 +64,6 @@ else:
         allow_patterns=["models/mae/jax/mae_latent_256/*"],
     )
 
-FID_STATS_PATH = WFLOW_DIR / "stats/jit_in256_stats.npz"
 if FID_STATS_PATH.is_file():
     print(f"Using existing ImageNet-256 FID statistics at {FID_STATS_PATH}.")
 else:
@@ -71,9 +74,9 @@ else:
         FID_STATS_PATH,
     )
 
-print(f"Downloading torch-fidelity Inception network to {TORCH_HUB_DIR} ...")
-TORCH_HUB_DIR.mkdir(parents=True, exist_ok=True)
-torch.hub.set_dir(str(TORCH_HUB_DIR))
+print(f"Downloading torch-fidelity Inception network to {TORCH_HUB_PATH} ...")
+TORCH_HUB_PATH.mkdir(parents=True, exist_ok=True)
+torch.hub.set_dir(str(TORCH_HUB_PATH))
 create_feature_extractor(
     "inception-v3-compat",
     ["2048", "logits_unbiased"],
@@ -84,7 +87,7 @@ required_files = [
     *VAE_REQUIRED,
     *MAE_REQUIRED,
     FID_STATS_PATH,
-    TORCH_HUB_DIR / "checkpoints/weights-inception-2015-12-05-6726825d.pth",
+    TORCH_HUB_PATH / "checkpoints/weights-inception-2015-12-05-6726825d.pth",
 ]
 missing = [path for path in required_files if not path.is_file()]
 if missing:
