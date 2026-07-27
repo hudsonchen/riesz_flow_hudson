@@ -5,7 +5,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=64
-#SBATCH --gpus-per-node=8
+#SBATCH --gpus-per-node=4
 #SBATCH --mem=0
 #SBATCH --time=8:00:00
 #SBATCH --output=%x-%j.out
@@ -44,7 +44,7 @@ export MKL_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 export NUMEXPR_NUM_THREADS=1
 
-NGPU=${NGPU:-${SLURM_GPUS_ON_NODE:-8}}
+NGPU=${NGPU:-${SLURM_GPUS_ON_NODE:-4}}
 MASTER_PORT=${MASTER_PORT:-6668}
 CONFIG=${CONFIG:-configs/gen/imagenet64_riesz.yaml}
 WORKDIR=${WORKDIR:-"${RDS_ROOT}/runs/imagenet64_riesz"}
