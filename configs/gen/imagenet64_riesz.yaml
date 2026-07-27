@@ -9,7 +9,8 @@ dataset:
   use_cache: false
   num_classes: 1000
   eval_split: train
-  batch_size_per_gpu: 256
+  # Fixed global loader batch; model_builder splits this across all GPUs.
+  batch_size: 256
   eval_batch_size: 64
   kwargs:
     num_workers: 8
@@ -75,7 +76,9 @@ train:
     every_k_block: .inf
   cfg_list: [1.0, 1.5, 2.0, 2.5]
   ema_decay: 0.999
-  push_per_step: 256
+  # Zero means consume exactly one local loader batch per optimizer step.
+  # Across DDP ranks, those local batches form the fixed global batch above.
+  push_per_step: 0
   # Refill one normal batch after restoring a checkpoint. The old default of
   # 3000 batches looked like a freeze when latents were encoded online.
   push_at_resume: 1

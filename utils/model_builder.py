@@ -11,6 +11,20 @@ from utils.logging import WandbLogger
 from utils.misc import EasyDict
 
 
+def split_global_batch_size(name: str, global_batch_size: int, world_size: int) -> int:
+    """Return an exact per-rank share of a fixed global batch size."""
+    global_batch_size = int(global_batch_size)
+    world_size = int(world_size)
+    if global_batch_size <= 0:
+        raise ValueError(f"{name} must be positive, got {global_batch_size}")
+    if global_batch_size % world_size != 0:
+        raise ValueError(
+            f"{name}={global_batch_size} must be divisible by world_size={world_size} "
+            "so every GPU receives the same batch size."
+        )
+    return global_batch_size // world_size
+
+
 def resolve_training_steps(config, train_loader) -> tuple[int, int]:
     """Resolve an epoch budget to optimizer steps for the current world size."""
     local_batch_size = int(train_loader.batch_size)
@@ -71,10 +85,26 @@ def build_model_dict(config, model_class, *, workdir: str = "runs"):
     )
 
     print("Building dataset...")
+    world_size = process_count()
     if "batch_size_per_gpu" in config.dataset:
         batch_size_per_node = int(config.dataset.batch_size_per_gpu)
     else:
-        batch_size_per_node = config.dataset.batch_size // process_count()
+        batch_size_per_node = split_global_batch_size(
+            "dataset.batch_size",
+            config.dataset.batch_size,
+            world_size,
+        )
+    split_global_batch_size(
+        "dataset.eval_batch_size",
+        config.dataset.eval_batch_size,
+        world_size,
+    )
+    if int(config.train.get("train_batch_size", 0)) > 0:
+        split_global_batch_size(
+            "train.train_batch_size",
+            config.train.train_batch_size,
+            world_size,
+        )
     resolution = int(config.dataset.resolution)
     use_aug = bool(config.dataset.get("use_aug", False))
     use_latent = bool(config.dataset.get("use_latent", False))
@@ -96,7 +126,7 @@ def build_model_dict(config, model_class, *, workdir: str = "runs"):
         use_aug=use_aug,
         use_latent=use_latent,
         use_cache=use_cache,
-        batch_size=config.dataset.eval_batch_size // process_count(),
+        batch_size=int(config.dataset.eval_batch_size) // world_size,
         split=eval_split,
         **config.dataset.kwargs,
     )

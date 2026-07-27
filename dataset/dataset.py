@@ -91,11 +91,18 @@ def create_imagenet_split(
 
     world = process_count()
     rank = process_index()
-    sampler = DistributedSampler(ds, num_replicas=world, rank=rank, shuffle=True)
+    drop_last = split == "train"
+    sampler = DistributedSampler(
+        ds,
+        num_replicas=world,
+        rank=rank,
+        shuffle=True,
+        drop_last=drop_last,
+    )
     loader = DataLoader(
         ds,
         batch_size=batch_size,
-        drop_last=(split == "train"),
+        drop_last=drop_last,
         worker_init_fn=partial(worker_init_fn, rank=rank),
         sampler=sampler,
         num_workers=num_workers,
