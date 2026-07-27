@@ -1,5 +1,5 @@
 #!/bin/bash -l
-#SBATCH --job-name=imagenet64_riesz
+#SBATCH --job-name=imagenet64_sinkhorn
 #SBATCH --account=airr-p109-dawn-gpu
 #SBATCH --partition=pvc9
 #SBATCH --nodes=1
@@ -40,8 +40,8 @@ export NUMEXPR_NUM_THREADS=1
 
 NGPU=${NGPU:-${SLURM_GPUS_ON_NODE:-4}}
 MASTER_PORT=${MASTER_PORT:-6668}
-CONFIG=${CONFIG:-configs/gen/imagenet64_riesz.yaml}
-WORKDIR=${WORKDIR:-"${RDS_ROOT}/runs/imagenet64_riesz"}
+CONFIG=${CONFIG:-configs/gen/imagenet64_pilot.yaml}
+WORKDIR=${WORKDIR:-"${RDS_ROOT}/runs/imagenet64_sinkhorn"}
 
 mkdir -p "$WORKDIR"
 
