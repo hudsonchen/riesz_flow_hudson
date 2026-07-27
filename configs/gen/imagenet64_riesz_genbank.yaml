@@ -49,7 +49,6 @@ train:
   diverse_noise: true
   train_batch_size: 8
   seed: 42
-  total_steps: 30000
   save_per_step: 500
   keep_every: 2500
   eval_per_step: 500

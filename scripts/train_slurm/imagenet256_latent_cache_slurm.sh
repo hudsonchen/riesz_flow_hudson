@@ -15,6 +15,12 @@
 
 set -euo pipefail
 
+if [[ -z "${SLURM_JOB_ID:-}" ]]; then
+    echo "This script must be submitted through Slurm:"
+    printf '  sbatch %q\n' "$0"
+    exit 1
+fi
+
 # Intel oneAPI module/conda hooks can reference unset variables. Relax nounset
 # only while those external shell hooks run, then restore strict mode.
 set +u
