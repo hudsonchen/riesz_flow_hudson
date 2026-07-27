@@ -13,12 +13,6 @@
 
 set -euo pipefail
 
-if [[ -z "${SLURM_JOB_ID:-}" ]]; then
-    echo "This script must be submitted through Slurm:"
-    printf '  sbatch %q\n' "$0"
-    exit 1
-fi
-
 # Match the Dawn environment used by the ImageNet-256 launcher. Intel oneAPI
 # module/Conda hooks can reference unset variables, so relax nounset only while
 # those external shell hooks run.
