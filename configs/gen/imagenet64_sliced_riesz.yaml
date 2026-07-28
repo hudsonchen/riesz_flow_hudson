@@ -50,7 +50,7 @@ train:
   diverse_noise: true
   train_batch_size: 8
   seed: 42
-  num_epochs: 50
+  num_epochs: 100
   save_per_step: 500
   keep_every: 2500
   eval_per_step: 500
