@@ -104,6 +104,55 @@ def _center_crop_256(image: Image.Image) -> Image.Image:
     return center_crop_arr(image, 256)
 
 
+def _cache_split_is_complete(
+    *,
+    moments_path: str,
+    flip_path: str,
+    targets_path: str,
+    expected_targets: list[int],
+    latent_shape: tuple[int, int, int],
+) -> tuple[bool, str]:
+    """Check that an existing split cache has the expected arrays and labels."""
+    paths = (moments_path, flip_path, targets_path)
+    missing = [path for path in paths if not os.path.isfile(path)]
+    if missing:
+        return False, "missing " + ", ".join(os.path.basename(path) for path in missing)
+
+    n_samples = len(expected_targets)
+    try:
+        moments = np.load(moments_path, mmap_mode="r")
+        moments_flip = np.load(flip_path, mmap_mode="r")
+        targets = np.load(targets_path, mmap_mode="r")
+    except (OSError, ValueError) as exc:
+        return False, f"could not load cache arrays: {exc}"
+
+    expected_moments_shape = (n_samples, *latent_shape)
+    if moments.shape != expected_moments_shape or moments.dtype != np.float32:
+        return False, (
+            f"{os.path.basename(moments_path)} has shape/dtype "
+            f"{moments.shape}/{moments.dtype}, expected "
+            f"{expected_moments_shape}/float32"
+        )
+    if moments_flip.shape != expected_moments_shape or moments_flip.dtype != np.float32:
+        return False, (
+            f"{os.path.basename(flip_path)} has shape/dtype "
+            f"{moments_flip.shape}/{moments_flip.dtype}, expected "
+            f"{expected_moments_shape}/float32"
+        )
+    if targets.shape != (n_samples,) or targets.dtype != np.int64:
+        return False, (
+            f"{os.path.basename(targets_path)} has shape/dtype "
+            f"{targets.shape}/{targets.dtype}, expected {(n_samples,)}/int64"
+        )
+
+    # Comparing labels with ImageFolder catches a preallocated cache whose
+    # encoding job stopped before all training batches were written.
+    if not np.array_equal(targets, np.asarray(expected_targets, dtype=np.int64)):
+        return False, f"{os.path.basename(targets_path)} does not match the source dataset"
+
+    return True, "all three arrays match the source dataset"
+
+
 # ---------------------------------------------------------------------------
 # Cache builder
 # ---------------------------------------------------------------------------
@@ -116,6 +165,7 @@ def create_cached_dataset(
     num_workers: int = 8,
     prefetch_factor: int = 2,
     pin_memory: bool = False,
+    skip_existing_train: bool = False,
 ) -> None:
     """Encode ImageNet images into VAE latents and write memory-mapped .npy files.
 
@@ -153,6 +203,19 @@ def create_cached_dataset(
         moments_path = os.path.join(target_path, f"{split}_moments.npy")
         flip_path = os.path.join(target_path, f"{split}_moments_flip.npy")
         targets_path = os.path.join(target_path, f"{split}_targets.npy")
+
+        if split == "train" and skip_existing_train:
+            cache_complete, reason = _cache_split_is_complete(
+                moments_path=moments_path,
+                flip_path=flip_path,
+                targets_path=targets_path,
+                expected_targets=ds.targets,
+                latent_shape=latent_shape,
+            )
+            if cache_complete:
+                print(f"[train] existing cache is complete ({reason}); skipping train")
+                continue
+            print(f"[train] existing cache is not complete ({reason}); rebuilding train")
 
         mm_moments = np.lib.format.open_memmap(
             moments_path, mode="w+", dtype=np.float32,
@@ -249,6 +312,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--pin-memory", action="store_true",
         help="Enable DataLoader pin_memory.",
     )
+    parser.add_argument(
+        "--skip-existing-train", action="store_true",
+        help=(
+            "Skip train encoding when all three train cache arrays have the "
+            "expected shapes, dtypes, and source labels."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -261,6 +331,7 @@ def main(argv: list[str] | None = None) -> None:
         num_workers=args.num_workers,
         prefetch_factor=args.prefetch_factor,
         pin_memory=args.pin_memory,
+        skip_existing_train=args.skip_existing_train,
     )
 
 

@@ -92,7 +92,8 @@ srun python -u -m dataset.latent \
     --local-batch-size 128 \
     --num-workers 16 \
     --prefetch-factor 2 \
-    --pin-memory
+    --pin-memory \
+    --skip-existing-train
 
 echo "End time: $(date)"
 

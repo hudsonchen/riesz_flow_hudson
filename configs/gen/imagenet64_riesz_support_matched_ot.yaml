@@ -6,8 +6,12 @@ dataset:
   resolution: 64
   use_aug: false
   use_latent: true
+  # The released cache contains 32x32 latents for 256px images, so encode the
+  # 64px images online into 8x8 latents instead.
   use_cache: false
   num_classes: 1000
+  # The local ILSVRC validation images are flat rather than class-organized.
+  # Reuse the class-organized training split only for periodic sample previews.
   eval_split: train
   batch_size_per_gpu: 256
   eval_batch_size: 64
@@ -21,11 +25,13 @@ model:
   input_size: 8
   in_channels: 4
   patch_size: 2
+
   hidden_size: 192
   depth: 6
   num_heads: 6
   mlp_ratio: 4.0
   out_channels: 4
+
   use_qknorm: true
   use_swiglu: true
   use_rope: true
@@ -49,53 +55,49 @@ train:
   diverse_noise: true
   train_batch_size: 8
   seed: 42
-  total_steps: 150000
+  num_epochs: 50
   save_per_step: 500
   keep_every: 2500
   eval_per_step: 500
   eval_samples: 64
   sanity_samples: 64
+  # A 64px preview has no matching reference-statistics file. Save sample
+  # grids during evaluation without reporting a misleading ImageNet-256 FID.
   eval_fid: false
   eval_isc: false
   eval_prc_recall: false
-
   pos_per_sample: 16
   neg_per_sample: 8
   positive_bank_size: 32
   negative_bank_size: 256
-
   forward_dict:
     gen_per_label: 16
     cfg_min: 1.0
     cfg_max: 4.0
     neg_cfg_pw: 3.0
-
   activation_kwargs:
+    # At 8x8 latent resolution, retain the principal MAE spatial hierarchy and
+    # avoid the 63 extra patch-statistic/intermediate-block feature views used
+    # by the full 32x32 setup.
     patch_mean_size: []
     patch_std_size: []
     use_std: false
     use_mean: false
     every_k_block: .inf
-
   cfg_list: [1.0, 1.5, 2.0, 2.5]
   ema_decay: 0.999
   push_per_step: 256
-
-  # Refill one ordinary data batch after restoring a checkpoint.
+  # Refill one normal batch after restoring a checkpoint. The old default of
+  # 3000 batches looked like a freeze when latents were encoded online.
   push_at_resume: 1
-
   grad_accum_steps: 2
   max_grad_norm: 2.0
-
+  loss_kwargs:
+    R_list: [0.05]
   ot_mode: "none"
   use_riesz: true
-
   riesz_kwargs:
     epsilon: 1.0e-6
-    self_support_mode: "bank"
-    generated_bank_size: 16
-    generated_bank_samples: 16
-    generated_bank_dtype: "float16"
 
 feature:
   mae_path: "hf://mae_latent_256"
