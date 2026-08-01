@@ -177,11 +177,24 @@ Then download model assets:
 python misc/download.py
 ```
 
+For an ImageNet-256 config using `hf://mae_latent_640`, download only that
+feature extractor into a shared cache with:
+
+```bash
+WFLOW_CACHE_ROOT=/path/to/cache \
+python misc/download.py --mae-only mae_latent_640
+```
+
+This creates
+`/path/to/cache/drifting_hf_root/models/mae/jax/mae_latent_640/metadata.json`
+and `ema_params.msgpack`. The weights file is approximately 10.75 GB.
+
 This downloads:
 
 - W-Flow checkpoints from `WFLOW_HF_REPO_ID` into `WFLOW_HF_ROOT`.
 - SD-VAE weights into `VAE_HF_PATH`.
-- MAE feature extractors from `Goodeat/drifting` into `HF_ROOT`.
+- The `mae_latent_256` and `mae_latent_640` feature extractors from
+  `Goodeat/drifting` into `HF_ROOT`.
 - The torch-fidelity Inception network into `TORCH_HUB_DIR`.
 
 
