@@ -54,6 +54,9 @@ train:
   save_per_step: 2000
   keep_every: 10000
   eval_per_step: 1000000
+  eval_fid: false
+  eval_isc: false
+  eval_prc_recall: false
 
   pos_per_sample: 16
   neg_per_sample: 8

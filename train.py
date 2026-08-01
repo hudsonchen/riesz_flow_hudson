@@ -598,7 +598,7 @@ def train_gen(
                     model_config=_generator_model_config(state.model),
                 )
 
-        if (step % eval_per_step == 0) or (step == 1) or (step == total_steps):
+        if step > 1 and ((step % eval_per_step == 0) or (step == total_steps)):
             accelerator_empty_cache()
             is_sanity = step == 1
             n_samples = sanity_samples if is_sanity else eval_samples
