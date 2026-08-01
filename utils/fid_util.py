@@ -233,7 +233,9 @@ def evaluate_fid(
     eval_iter = epoch0_sampler(eval_loader)
     all_samples = []
     cur = 0
-    it = tqdm(enumerate(eval_iter), desc="FID gen") if is_rank_zero() else enumerate(eval_iter)
+    metrics_enabled = eval_fid or eval_isc or eval_prc_recall
+    progress_desc = "FID gen" if metrics_enabled else "Preview gen"
+    it = tqdm(enumerate(eval_iter), desc=progress_desc) if is_rank_zero() else enumerate(eval_iter)
     for i, batch in it:
         gen_samples = gen_func(batch, **gen_params, rng=int(rng_eval) + i)
 

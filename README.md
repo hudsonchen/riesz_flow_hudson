@@ -348,10 +348,12 @@ bash scripts/train/imagenet64_riesz.sh
 ```
 
 The pilot uses a 4.5M-parameter, 6-layer DiT on $8\times8\times4$ SD-VAE
-latents and retains the released latent-MAE multi-scale loss. Training saves a
-small sanity grid at step 1 and 64-sample preview grids every 5,000 optimizer
-steps. Full 50K-sample FID is intentionally run as a separate job after
-training, so it does not pause or destabilize the training allocation.
+latents and retains the released latent-MAE multi-scale loss. Training saves
+lightweight preview grids after step 1 and records their timing alongside the
+training metrics in `<workdir>/log/metrics.jsonl`. FID, IS, and
+precision/recall computation remain disabled. Full 50K-sample FID is run as a
+separate job after training, so it does not pause or destabilize the training
+allocation.
 Override `WORKDIR`, `NGPU`, or `DRIFT_COMPILE` through the environment when
 launching the script.
 
@@ -389,7 +391,7 @@ torchrun --nproc_per_node=8 train.py \
 
 - The training scripts set `DRIFT_COMPILE=1` by default to enable `torch.compile` for the generator and feature/loss computations when available in order to speedup the training once compiled. If compilation causes long startup time or compatibility issues on your machine, disable it with `DRIFT_COMPILE=0`.
 
-- During training, checkpoints are written under `<workdir>/checkpoints/`. The ImageNet-64 and ImageNet-256 Riesz configs save lightweight sample previews every 5,000 optimizer steps; use the separate job in "📊 FID Evaluation" for final 50K-sample FID.
+- During training, checkpoints are written under `<workdir>/checkpoints/`, preview grids under `<workdir>/log/images/`, and JSONL metrics under `<workdir>/log/metrics.jsonl`. ImageNet training disables FID, IS, and precision/recall computation; use the separate job in "📊 FID Evaluation" for final 50K-sample FID.
 
 - The config field `train.ot_mode` selects between the W-Flow OT loss (`"debiased"`) and the original drifting loss (`"none"`). Setting the independent flag `train.use_riesz: true` selects the direct, scale-normalized energy-distance Riesz loss with $k(x,y)=-\lVert x-y\rVert_2$ from `riesz_loss.py`; the optional `train.riesz_kwargs` dictionary accepts `epsilon`. Note that we never report results obtained by the drifting-model implementation in our paper; we always cite the results reported in their original paper.
 

@@ -359,7 +359,15 @@ def train_step(
 
 
 @torch.no_grad()
-def generate_step(batch, model, rng, postprocess_fn, cfg_scale=1.0, device: Optional[torch.device] = None):
+def generate_step(
+    batch,
+    model,
+    rng,
+    postprocess_fn,
+    cfg_scale=1.0,
+    device: Optional[torch.device] = None,
+    decode_batch_size=1,
+):
     _, labels = batch
     labels = torch.as_tensor(labels, dtype=torch.long)
     if device is None:
@@ -376,7 +384,11 @@ def generate_step(batch, model, rng, postprocess_fn, cfg_scale=1.0, device: Opti
         train=False,
         rng=gen,
     )["samples"]
-    return postprocess_fn(latent_samples)
+    decode_batch_size = int(decode_batch_size)
+    if decode_batch_size <= 0:
+        return postprocess_fn(latent_samples)
+    decoded = [postprocess_fn(chunk) for chunk in latent_samples.split(decode_batch_size)]
+    return torch.cat(decoded, dim=0)
 
 
 def train_gen(
@@ -397,7 +409,8 @@ def train_gen(
     eval_per_step=5000,
     eval_samples=50000,
     sanity_samples=500,
-    eval_fid=True,
+    eval_decode_batch_size=1,
+    eval_fid=False,
     eval_isc=False,
     eval_prc_recall=False,
     activation_fn=None,
@@ -611,7 +624,13 @@ def train_gen(
                 result = evaluate_fid(
                     dataset_name=dataset_name,
                     gen_func=generate_step,
-                    gen_params={"model": state.ema_model, "cfg_scale": eval_cfg, "postprocess_fn": postprocess_fn, "device": device},
+                    gen_params={
+                        "model": state.ema_model,
+                        "cfg_scale": eval_cfg,
+                        "postprocess_fn": postprocess_fn,
+                        "device": device,
+                        "decode_batch_size": eval_decode_batch_size,
+                    },
                     eval_loader=eval_loader,
                     logger=logger,
                     num_samples=n_samples,
@@ -626,7 +645,7 @@ def train_gen(
                 if fid_val < round_best_fid:
                     round_best_fid = fid_val
                     round_best_cfg = eval_cfg
-            if not is_sanity:
+            if eval_fid and not is_sanity:
                 log_for_0("best_fid=%.4f best_cfg=%.1f (step=%d)", round_best_fid, round_best_cfg, step)
                 if is_rank_zero():
                     logger.log_dict({"best_fid": round_best_fid, "best_cfg": round_best_cfg})
