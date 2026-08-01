@@ -15,7 +15,7 @@ set -euo pipefail
 
 if [[ -z "${SLURM_JOB_ID:-}" ]]; then
     echo "This script must be submitted through Slurm:"
-    printf '  sbatch %q\n' "$0"
+    printf '  sbatch %q\n' "${SUBMIT_SCRIPT:-$0}"
     exit 1
 fi
 
@@ -49,7 +49,8 @@ NNODES=${SLURM_JOB_NUM_NODES:-2}
 NGPU=${SLURM_GPUS_ON_NODE:-4}
 MASTER_PORT=${MASTER_PORT:-6669}
 CONFIG=${CONFIG:-configs/gen/imagenet256_B_riesz.yaml}
-WORKDIR=${WORKDIR:-"${RDS_ROOT}/runs/imagenet256_B_riesz"}
+RUN_NAME=${RUN_NAME:-imagenet256_B_riesz}
+WORKDIR=${WORKDIR:-"${RDS_ROOT}/runs/${RUN_NAME}"}
 
 mapfile -t NODE_HOSTS < <(scontrol show hostnames "$SLURM_JOB_NODELIST")
 MASTER_ADDR=${MASTER_ADDR:-"${NODE_HOSTS[0]}"}
@@ -88,6 +89,7 @@ echo "Host:           $(hostname)"
 echo "Start time:     $(date)"
 echo "Repository:     ${REPO_DIR}"
 echo "Config:         ${CONFIG}"
+echo "Run name:       ${RUN_NAME}"
 echo "Cache root:     ${WFLOW_CACHE_ROOT}"
 echo "Latent cache:   ${IMAGENET_CACHE_PATH}"
 echo "MAE-640:        ${MAE_ROOT}"
@@ -98,7 +100,7 @@ echo "Total GPUs:     $((NNODES * NGPU))"
 echo "Master address: ${MASTER_ADDR}"
 echo "Master port:    ${MASTER_PORT}"
 
-export REPO_DIR RDS_ROOT NNODES NGPU MASTER_ADDR MASTER_PORT CONFIG WORKDIR
+export REPO_DIR RDS_ROOT NNODES NGPU MASTER_ADDR MASTER_PORT CONFIG RUN_NAME WORKDIR
 export DRIFT_COMPILE=${DRIFT_COMPILE:-1}
 export DRIFT_FEAT_CHUNK=${DRIFT_FEAT_CHUNK:-1}
 export NCCL_DEBUG=${NCCL_DEBUG:-WARN}
