@@ -10,6 +10,22 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
+if os.environ.get("SLURM_JOB_ID") and "LOCAL_RANK" in os.environ:
+    cache_root = Path(os.environ.get("SLURM_TMPDIR", "/tmp"))
+    cache_tag = (
+        f"wflow_{os.environ['SLURM_JOB_ID']}_"
+        f"{os.environ.get('SLURM_NODEID', '0')}_"
+        f"{os.environ['LOCAL_RANK']}"
+    )
+
+    triton_cache = cache_root / cache_tag / "triton"
+    inductor_cache = cache_root / cache_tag / "torchinductor"
+    triton_cache.mkdir(parents=True, exist_ok=True)
+    inductor_cache.mkdir(parents=True, exist_ok=True)
+
+    os.environ["TRITON_CACHE_DIR"] = str(triton_cache)
+    os.environ["TORCHINDUCTOR_CACHE_DIR"] = str(inductor_cache)
+
 import torch
 from einops import rearrange, repeat
 from tqdm import tqdm
