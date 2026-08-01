@@ -103,7 +103,14 @@ export DRIFT_COMPILE=${DRIFT_COMPILE:-1}
 export DRIFT_FEAT_CHUNK=${DRIFT_FEAT_CHUNK:-1}
 export NCCL_DEBUG=${NCCL_DEBUG:-WARN}
 
+# Slurm starts one torchrun agent per node; torchrun then starts one XCCL
+# worker per XPU.  Do not let oneCCL's MPI/Hydra defaults attach those child
+# workers to the two-task Slurm PMI world.
+export CCL_PROCESS_LAUNCHER=torchrun
+export CCL_ATL_TRANSPORT=ofi
+
 srun \
+    --mpi=none \
     --export=ALL \
     --ntasks="$NNODES" \
     --ntasks-per-node=1 \

@@ -168,6 +168,7 @@ WFLOW_HF_ROOT = "/path/to/wflow_hf_root"
 IMAGENET_PATH = "/path/to/imagenet-1k"
 IMAGENET_CACHE_PATH = "/path/to/imagenet256-latents-sdvae"
 IMAGENET_FID_NPZ = "/path/to/jit_in256_stats.npz"
+IMAGENET64_FID_NPZ = "/path/to/VIRTUAL_imagenet64_labeled.npz"
 IMAGENET_PR_NPZ = "/path/to/imagenet_val_prc_arr0.npz"
 ```
 
@@ -293,6 +294,40 @@ torchrun --nproc_per_node=8 inference_ours.py evaluate \
 
 `IMAGENET_FID_NPZ` should be set in `utils/env.py` and point to the ImageNet 256×256 FID statistics. The released W-Flow checkpoint repo provides `stats/jit_in256_stats.npz`, copied from the JiT FID statistics.
 
+For a completed ImageNet-64 or ImageNet-256 training run, the standalone
+evaluator selects the newest `checkpoints/state_*.pt`, evaluates every CFG
+scale in the config, and writes one JSON file per scale plus a best-FID
+summary:
+
+```bash
+torchrun --standalone --nproc_per_node=4 evaluate_checkpoint_fidutil.py \
+  --run-dir /path/to/completed/run \
+  --config configs/gen/imagenet256_B_riesz.yaml \
+  --num-samples 50000 \
+  --gen-bsz 64 \
+  --skip-existing
+```
+
+Set `--cfg-scales "1.0,1.5,2.0,2.5"` to evaluate a subset. ImageNet-64 uses
+`IMAGENET64_FID_NPZ` (the matching `VIRTUAL_imagenet64_labeled.npz` archive),
+while ImageNet-256 uses `IMAGENET_FID_NPZ`. Generated PNGs are removed after
+each score unless `--keep-samples` is supplied.
+
+On Dawn, submit the generic one-node, four-XPU job after training succeeds:
+
+```bash
+TARGET=imagenet256 sbatch --dependency=afterok:<training-job-id> \
+  scripts/eval_fid/imagenet_finished_run_slurm.sh
+
+TARGET=imagenet64 CONFIG=configs/gen/imagenet64_riesz.yaml \
+  RUN_DIR=/path/to/imagenet64/run \
+  sbatch scripts/eval_fid/imagenet_finished_run_slurm.sh
+```
+
+`CFG_SCALES`, `CKPT`, `NUM_SAMPLES`, `GEN_BSZ`, `RESULT_DIR`, and
+`KEEP_SAMPLES` can all be overridden when submitting the job. If `CFG_SCALES`
+is unset, the launcher evaluates the complete `train.cfg_list`.
+
 ## 🏋️ Training
 
 This release trains class-conditional ImageNet 256×256 generators in SD-VAE latent space with DiT-style architectures and pretrained latent-MAE feature encoders.
@@ -313,11 +348,12 @@ bash scripts/train/imagenet64_riesz.sh
 ```
 
 The pilot uses a 4.5M-parameter, 6-layer DiT on $8\times8\times4$ SD-VAE
-latents and retains the released latent-MAE multi-scale loss. It saves offline
-preview grids below `runs/imagenet64_pilot/log/images/`. It intentionally does
-not report FID because the released reference statistics are for ImageNet-256,
-not ImageNet-64. Override `WORKDIR`, `NGPU`, or `DRIFT_COMPILE` through the
-environment when launching the script.
+latents and retains the released latent-MAE multi-scale loss. Training saves a
+small sanity grid at step 1 and 64-sample preview grids every 5,000 optimizer
+steps. Full 50K-sample FID is intentionally run as a separate job after
+training, so it does not pause or destabilize the training allocation.
+Override `WORKDIR`, `NGPU`, or `DRIFT_COMPILE` through the environment when
+launching the script.
 
 Single-node scripts:
 
@@ -353,7 +389,7 @@ torchrun --nproc_per_node=8 train.py \
 
 - The training scripts set `DRIFT_COMPILE=1` by default to enable `torch.compile` for the generator and feature/loss computations when available in order to speedup the training once compiled. If compilation causes long startup time or compatibility issues on your machine, disable it with `DRIFT_COMPILE=0`.
 
-- During training, checkpoints are written under `<workdir>/checkpoints/`, and periodic FID preview evaluation is controlled by `train.eval_per_step` and `train.cfg_list` in the config. Note that the FID metrics logged during training are just for reference; refer to "📊 FID Evaluation" for computing the precise FID metrics.
+- During training, checkpoints are written under `<workdir>/checkpoints/`. The ImageNet-64 and ImageNet-256 Riesz configs save lightweight sample previews every 5,000 optimizer steps; use the separate job in "📊 FID Evaluation" for final 50K-sample FID.
 
 - The config field `train.ot_mode` selects between the W-Flow OT loss (`"debiased"`) and the original drifting loss (`"none"`). Setting the independent flag `train.use_riesz: true` selects the direct, scale-normalized energy-distance Riesz loss with $k(x,y)=-\lVert x-y\rVert_2$ from `riesz_loss.py`; the optional `train.riesz_kwargs` dictionary accepts `epsilon`. Note that we never report results obtained by the drifting-model implementation in our paper; we always cite the results reported in their original paper.
 

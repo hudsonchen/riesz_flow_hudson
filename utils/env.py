@@ -42,6 +42,10 @@ IMAGENET_CACHE_PATH = os.environ.get(
 IMAGENET_FID_NPZ = os.environ.get(
     "IMAGENET_FID_NPZ", str(Path(WFLOW_HF_ROOT) / "stats/jit_in256_stats.npz")
 )
+IMAGENET64_FID_NPZ = os.environ.get(
+    "IMAGENET64_FID_NPZ",
+    str(Path(WFLOW_HF_ROOT) / "stats/VIRTUAL_imagenet64_labeled.npz"),
+)
 
 HF_REPO_ID = "Goodeat/drifting"
 

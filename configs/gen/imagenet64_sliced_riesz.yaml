@@ -53,9 +53,10 @@ train:
   num_epochs: 100
   save_per_step: 500
   keep_every: 2500
-  eval_per_step: 500
+  eval_per_step: 5000
   eval_samples: 64
   sanity_samples: 64
+  # Compute the final 50K-sample FID in a separate evaluation job.
   eval_fid: false
   eval_isc: false
   eval_prc_recall: false

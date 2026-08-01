@@ -11,7 +11,7 @@ dataset:
   use_cache: false
   num_classes: 1000
   # The local ILSVRC validation images are flat rather than class-organized.
-  # Reuse the class-organized training split only for periodic sample previews.
+  # Reuse the class-organized training split for periodic sample previews.
   eval_split: train
   # Fixed global loader batch; model_builder splits this across all GPUs.
   batch_size: 1024
@@ -59,11 +59,10 @@ train:
   num_epochs: 100
   save_per_step: 500
   keep_every: 2500
-  eval_per_step: 500
+  eval_per_step: 5000
   eval_samples: 64
   sanity_samples: 64
-  # A 64px preview has no matching reference-statistics file. Save sample
-  # grids during evaluation without reporting a misleading ImageNet-256 FID.
+  # Compute the final 50K-sample FID in a separate evaluation job.
   eval_fid: false
   eval_isc: false
   eval_prc_recall: false
