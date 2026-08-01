@@ -48,11 +48,13 @@ train:
   diverse_noise: true
   train_batch_size: 128
   seed: 42
-  num_epochs: 80
+  # Eight-GPU scaling (2 nodes x 4 GPUs): 64 loader samples per GPU and
+  # 200,160 optimizer steps, matching the upstream 200k-step B/2 budget.
+  num_epochs: 160
   save_per_step: 2000
   keep_every: 20000
   eval_per_step: 5000
-  eval_samples: 5000
+  eval_samples: 50000
   eval_fid: true
   eval_isc: false
   eval_prc_recall: false
