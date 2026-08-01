@@ -13,6 +13,8 @@
 
 set -euo pipefail
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+
 if [[ -z "${SLURM_JOB_ID:-}" ]]; then
     echo "This script must be submitted through Slurm:"
     printf '  sbatch %q\n' "${SUBMIT_SCRIPT:-$0}"
@@ -51,12 +53,17 @@ MASTER_PORT=${MASTER_PORT:-6669}
 CONFIG=${CONFIG:-configs/gen/imagenet256_B_riesz.yaml}
 RUN_NAME=${RUN_NAME:-imagenet256_B_riesz}
 WORKDIR=${WORKDIR:-"${RDS_ROOT}/runs/${RUN_NAME}"}
+RANK_ENTRYPOINT=${RANK_ENTRYPOINT:-"${SCRIPT_DIR}/torchrun_isolated_cache_entrypoint.py"}
 
 mapfile -t NODE_HOSTS < <(scontrol show hostnames "$SLURM_JOB_NODELIST")
 MASTER_ADDR=${MASTER_ADDR:-"${NODE_HOSTS[0]}"}
 
 test -f "$CONFIG" || {
     echo "Missing config: $CONFIG" >&2
+    exit 1
+}
+test -f "$RANK_ENTRYPOINT" || {
+    echo "Missing torchrun rank entrypoint: $RANK_ENTRYPOINT" >&2
     exit 1
 }
 
@@ -100,14 +107,14 @@ echo "Total GPUs:     $((NNODES * NGPU))"
 echo "Master address: ${MASTER_ADDR}"
 echo "Master port:    ${MASTER_PORT}"
 
-export REPO_DIR RDS_ROOT NNODES NGPU MASTER_ADDR MASTER_PORT CONFIG RUN_NAME WORKDIR
+export REPO_DIR RDS_ROOT NNODES NGPU MASTER_ADDR MASTER_PORT CONFIG RUN_NAME WORKDIR RANK_ENTRYPOINT
 export DRIFT_COMPILE=${DRIFT_COMPILE:-1}
 export DRIFT_FEAT_CHUNK=${DRIFT_FEAT_CHUNK:-1}
 export NCCL_DEBUG=${NCCL_DEBUG:-WARN}
 
 # Slurm starts one torchrun agent per node; torchrun then starts one XCCL
 # worker per XPU.  Do not let oneCCL's MPI/Hydra defaults attach those child
-# workers to the two-task Slurm PMI world.
+# workers to the Slurm PMI world.
 export CCL_PROCESS_LAUNCHER=torchrun
 export CCL_ATL_TRANSPORT=ofi
 
@@ -130,7 +137,7 @@ srun \
             --node_rank="$SLURM_NODEID" \
             --master_addr="$MASTER_ADDR" \
             --master_port="$MASTER_PORT" \
-            train.py \
+            "$RANK_ENTRYPOINT" \
             --config "$CONFIG" \
             --workdir "$WORKDIR"
     '
