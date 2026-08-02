@@ -25,7 +25,7 @@ model:
   cond_dim: 192
   input_size: 8
   in_channels: 4
-  patch_size: 2
+  patch_size: 1
 
   hidden_size: 192
   depth: 6

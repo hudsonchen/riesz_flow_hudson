@@ -2,7 +2,7 @@
 #SBATCH --job-name=imagenet256_B_sinkhorn
 #SBATCH --account=airr-p109-dawn-gpu
 #SBATCH --partition=pvc9
-#SBATCH --nodes=2
+#SBATCH --nodes=4
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=64
 #SBATCH --gpus-per-node=4
@@ -13,9 +13,10 @@
 
 set -euo pipefail
 
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_DIR=${REPO_DIR:-/home/rc-chen1/riesz_flow_hudson}
+export REPO_DIR
 export SUBMIT_SCRIPT=${SUBMIT_SCRIPT:-$0}
 export CONFIG=${CONFIG:-configs/gen/imagenet256_B_sinkhorn.yaml}
-export RUN_NAME=${RUN_NAME:-imagenet256_B_sinkhorn}
+export RUN_NAME=${RUN_NAME:-imagenet256_B_sinkhorn_4nodes}
 
-exec "${SCRIPT_DIR}/imagenet256_B_riesz_slurm.sh"
+exec "${REPO_DIR}/scripts/train_slurm/imagenet256_B_riesz_slurm.sh"

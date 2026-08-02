@@ -2,7 +2,7 @@
 #SBATCH --job-name=imagenet256_B_riesz
 #SBATCH --account=airr-p109-dawn-gpu
 #SBATCH --partition=pvc9
-#SBATCH --nodes=2
+#SBATCH --nodes=4
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=64
 #SBATCH --gpus-per-node=4
@@ -12,8 +12,6 @@
 #SBATCH --error=%x-%j.err
 
 set -euo pipefail
-
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 if [[ -z "${SLURM_JOB_ID:-}" ]]; then
     echo "This script must be submitted through Slurm:"
@@ -32,6 +30,7 @@ set -u
 
 REPO_DIR=${REPO_DIR:-/home/rc-chen1/riesz_flow_hudson}
 RDS_ROOT=${RDS_ROOT:-/home/rc-chen1/rds/rds-airr-p109-tfgYl93jDnM}
+TRAIN_SLURM_DIR=${TRAIN_SLURM_DIR:-"${REPO_DIR}/scripts/train_slurm"}
 
 cd "$REPO_DIR"
 
@@ -47,13 +46,13 @@ export MKL_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 export NUMEXPR_NUM_THREADS=1
 
-NNODES=${SLURM_JOB_NUM_NODES:-2}
+NNODES=${SLURM_JOB_NUM_NODES:-4}
 NGPU=${SLURM_GPUS_ON_NODE:-4}
 MASTER_PORT=${MASTER_PORT:-6669}
 CONFIG=${CONFIG:-configs/gen/imagenet256_B_riesz.yaml}
-RUN_NAME=${RUN_NAME:-imagenet256_B_riesz}
+RUN_NAME=${RUN_NAME:-imagenet256_B_riesz_4nodes}
 WORKDIR=${WORKDIR:-"${RDS_ROOT}/runs/${RUN_NAME}"}
-RANK_ENTRYPOINT=${RANK_ENTRYPOINT:-"${SCRIPT_DIR}/torchrun_isolated_cache_entrypoint.py"}
+RANK_ENTRYPOINT=${RANK_ENTRYPOINT:-"${TRAIN_SLURM_DIR}/torchrun_isolated_cache_entrypoint.py"}
 
 mapfile -t NODE_HOSTS < <(scontrol show hostnames "$SLURM_JOB_NODELIST")
 MASTER_ADDR=${MASTER_ADDR:-"${NODE_HOSTS[0]}"}

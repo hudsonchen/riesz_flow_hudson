@@ -8,7 +8,7 @@ dataset:
   use_latent: true
   use_cache: true
   num_classes: 1000
-  batch_size: 512
+  batch_size: 1024
   eval_batch_size: 2048
   kwargs:
     num_workers: 8
@@ -48,9 +48,10 @@ train:
   diverse_noise: true
   train_batch_size: 128
   seed: 42
-  # Eight-GPU scaling (2 nodes x 4 GPUs): 64 loader samples per GPU and
-  # 200,160 optimizer steps, matching the upstream 200k-step B/2 budget.
-  num_epochs: 160
+  # Sixteen-GPU scaling (4 nodes x 4 GPUs): 64 loader samples per GPU.
+  # This checkout derives duration from loader epochs, so 320 gives 200,160
+  # optimizer steps, matching the upstream fixed 200k-step B/2 budget.
+  num_epochs: 320
   save_per_step: 2000
   keep_every: 20000
   eval_per_step: 5000
@@ -65,7 +66,7 @@ train:
   positive_bank_size: 128
   negative_bank_size: 1000
   push_per_step: 128
-  grad_accum_steps: 8
+  grad_accum_steps: 4
   max_grad_norm: 2.0
 
   forward_dict:

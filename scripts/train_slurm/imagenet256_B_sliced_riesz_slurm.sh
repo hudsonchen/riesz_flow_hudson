@@ -13,9 +13,10 @@
 
 set -euo pipefail
 
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_DIR=${REPO_DIR:-/home/rc-chen1/riesz_flow_hudson}
+export REPO_DIR
 export SUBMIT_SCRIPT=${SUBMIT_SCRIPT:-$0}
 export CONFIG=${CONFIG:-configs/gen/imagenet256_B_sliced_riesz.yaml}
 export RUN_NAME=${RUN_NAME:-imagenet256_B_sliced_riesz}
 
-exec "${SCRIPT_DIR}/imagenet256_B_riesz_slurm.sh"
+exec "${REPO_DIR}/scripts/train_slurm/imagenet256_B_riesz_slurm.sh"

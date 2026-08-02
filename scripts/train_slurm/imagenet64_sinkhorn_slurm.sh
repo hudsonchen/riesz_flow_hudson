@@ -41,7 +41,7 @@ export NUMEXPR_NUM_THREADS=1
 NGPU=${NGPU:-${SLURM_GPUS_ON_NODE:-4}}
 MASTER_PORT=${MASTER_PORT:-6668}
 CONFIG=${CONFIG:-configs/gen/imagenet64_pilot.yaml}
-WORKDIR=${WORKDIR:-"${RDS_ROOT}/runs/imagenet64_sinkhorn"}
+WORKDIR=${WORKDIR:-"${RDS_ROOT}/runs/imagenet64_sinkhorn_patch1"}
 
 mkdir -p "$WORKDIR"
 

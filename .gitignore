@@ -7,3 +7,5 @@ __pycache__/
 .DS_Store
 .cache/
 results_cs_cluster/
+results_dawn/
+results_sophia/
