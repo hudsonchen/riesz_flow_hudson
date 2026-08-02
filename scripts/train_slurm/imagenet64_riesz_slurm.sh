@@ -41,7 +41,7 @@ export NUMEXPR_NUM_THREADS=1
 NGPU=${NGPU:-${SLURM_GPUS_ON_NODE:-4}}
 MASTER_PORT=${MASTER_PORT:-6668}
 CONFIG=${CONFIG:-configs/gen/imagenet64_riesz.yaml}
-WORKDIR=${WORKDIR:-"${RDS_ROOT}/runs/imagenet64_riesz_patch1"}
+WORKDIR=${WORKDIR:-"${RDS_ROOT}/runs/imagenet64_riesz_ps_1"}
 
 mkdir -p "$WORKDIR"
 

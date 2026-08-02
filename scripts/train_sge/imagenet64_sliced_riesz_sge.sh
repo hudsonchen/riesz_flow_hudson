@@ -47,7 +47,7 @@ fi
 export NGPU=${NGPU:-2}
 export MASTER_PORT=${MASTER_PORT:-6669}
 export CONFIG=${CONFIG:-configs/gen/imagenet64_sliced_riesz.yaml}
-export RUN_NAME=${RUN_NAME:-imagenet64_sliced_riesz_proj128_eps1e-6_lr2e-4_trainbs8_pos16_neg8_gen16_acc2_patch1}
+export RUN_NAME=${RUN_NAME:-imagenet64_sliced_riesz_proj128_eps1e-6_lr2e-4_trainbs8_pos16_neg8_gen16_acc2_ps_1}
 export WORKDIR=${WORKDIR:-/SAN/intelsys/imagenet_mmd_flow/$RUN_NAME}
 export DRIFT_COMPILE=${DRIFT_COMPILE:-0}
 export DRIFT_FEAT_CHUNK=${DRIFT_FEAT_CHUNK:-1}
