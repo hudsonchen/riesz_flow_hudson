@@ -17,13 +17,6 @@ def read_metadata(artifact_dir: Path) -> Dict[str, Any]:
 
 
 def load_jax_ema_params(artifact_dir: Path) -> Any:
-    # Prefer a one-time converted PyTorch state dict when available. Loading it
-    # avoids the large Flax MsgPack tree plus JAX-to-PyTorch conversion in every
-    # distributed worker. Keep MsgPack as the release-artifact fallback.
-    pt_path = artifact_dir / "ema_params.pt"
-    if pt_path.is_file():
-        return torch.load(pt_path, map_location="cpu", weights_only=False)
-
     msgpack_path = artifact_dir / "ema_params.msgpack"
     if msgpack_path.is_file():
         try:
@@ -32,6 +25,10 @@ def load_jax_ema_params(artifact_dir: Path) -> Any:
             return serialization.msgpack_restore(msgpack_path.read_bytes())
         except Exception as e:  # pragma: no cover - fallback path
             raise RuntimeError(f"Failed to read JAX msgpack params: {msgpack_path}") from e
+
+    pt_path = artifact_dir / "ema_params.pt"
+    if pt_path.is_file():
+        return torch.load(pt_path, map_location="cpu", weights_only=False)
 
     raise FileNotFoundError(f"No ema_params.msgpack or ema_params.pt found in {artifact_dir}")
 
