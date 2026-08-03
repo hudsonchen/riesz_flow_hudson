@@ -50,10 +50,6 @@ WORKDIR = (
     Path(os.environ.get("SLURM_TMPDIR", "/tmp"))
     / "imagenet256_pretrained_fid"
 )
-RESULT_JSON = (
-    DAWN_RDS_ROOT
-    / "results/imagenet256_pretrained_fid/fid50000_cfg1.19.json"
-)
 
 
 def _print0(*args, **kwargs) -> None:
@@ -127,7 +123,8 @@ def main() -> None:
     config_path = CONFIG_PATH.expanduser().resolve()
     fid_ref = FID_REFERENCE_PATH.expanduser().resolve()
     workdir = WORKDIR.expanduser().resolve()
-    json_out = RESULT_JSON.expanduser().resolve()
+    cfg_text = f"{CFG_SCALE:g}"
+    result_json = checkpoint.parent / f"fid{NUM_SAMPLES // 1000}k_cfg{cfg_text}.json"
 
     init_distributed()
     try:
@@ -177,9 +174,9 @@ def main() -> None:
                     "seed": SEED,
                 }
             )
-            _write_json_atomic(json_out, result)
+            _write_json_atomic(result_json, result)
             print(f"\nFID: {float(result['fid']):.6f}")
-            print(f"Saved result: {json_out}")
+            print(f"Saved result: {result_json}")
     finally:
         cleanup_distributed()
 
