@@ -84,7 +84,11 @@ test -f "${MAE_ROOT}/metadata.json" || {
     echo "Missing mae_latent_640 metadata: ${MAE_ROOT}/metadata.json" >&2
     exit 1
 }
-if [[ ! -f "${MAE_ROOT}/ema_params.msgpack" && ! -f "${MAE_ROOT}/ema_params.pt" ]]; then
+if [[ -f "${MAE_ROOT}/ema_params.pt" ]]; then
+    MAE_WEIGHT_FILE=ema_params.pt
+elif [[ -f "${MAE_ROOT}/ema_params.msgpack" ]]; then
+    MAE_WEIGHT_FILE=ema_params.msgpack
+else
     echo "Missing mae_latent_640 weights under: ${MAE_ROOT}" >&2
     exit 1
 fi
@@ -99,6 +103,7 @@ echo "Run name:       ${RUN_NAME}"
 echo "Cache root:     ${WFLOW_CACHE_ROOT}"
 echo "Latent cache:   ${IMAGENET_CACHE_PATH}"
 echo "MAE-640:        ${MAE_ROOT}"
+echo "MAE weights:    ${MAE_WEIGHT_FILE}"
 echo "Workdir:        ${WORKDIR}"
 echo "Nodes:          ${NNODES}"
 echo "GPUs per node:  ${NGPU}"
@@ -107,6 +112,7 @@ echo "Master address: ${MASTER_ADDR}"
 echo "Master port:    ${MASTER_PORT}"
 
 export REPO_DIR RDS_ROOT NNODES NGPU MASTER_ADDR MASTER_PORT CONFIG RUN_NAME WORKDIR RANK_ENTRYPOINT
+export SHARED_MAE_ROOT="${MAE_ROOT}" MAE_WEIGHT_FILE
 export DRIFT_COMPILE=${DRIFT_COMPILE:-1}
 export DRIFT_FEAT_CHUNK=${DRIFT_FEAT_CHUNK:-1}
 export NCCL_DEBUG=${NCCL_DEBUG:-WARN}
@@ -129,6 +135,54 @@ srun \
         cd "$REPO_DIR"
 
         echo "Host: $(hostname), node rank: ${SLURM_NODEID}"
+
+        # There is one srun task per node at this point. Stage the large MAE
+        # artifact once, before torchrun creates four local worker processes.
+        # The workers then read node-local storage instead of all reading RDS.
+        node_tmpdir=${SLURM_TMPDIR:-/tmp}
+        local_hf_root="${node_tmpdir}/wflow-drifting-hf-root"
+        local_mae_root="${local_hf_root}/models/mae/jax/mae_latent_640"
+        local_mae_weight="${local_mae_root}/${MAE_WEIGHT_FILE}"
+        shared_mae_weight="${SHARED_MAE_ROOT}/${MAE_WEIGHT_FILE}"
+        required_bytes=$(stat -c %s "$shared_mae_weight")
+
+        if [[ ! -f "${local_mae_root}/metadata.json" || ! -f "$local_mae_weight" || \
+              $(stat -c %s "$local_mae_weight" 2>/dev/null || echo 0) -ne $required_bytes ]]; then
+            available_bytes=$(df -B1 --output=avail "$node_tmpdir" | tail -n 1 | tr -d " ")
+            reserve_bytes=$((2 * 1024 * 1024 * 1024))
+            if (( available_bytes < required_bytes + reserve_bytes )); then
+                echo "Insufficient node-local space on $(hostname): need $((required_bytes + reserve_bytes)) bytes, have ${available_bytes}" >&2
+                exit 1
+            fi
+
+            if [[ -e "$local_mae_root" ]]; then
+                echo "Incomplete pre-existing node-local MAE directory: ${local_mae_root}" >&2
+                exit 1
+            fi
+
+            stage_tmp=$(mktemp -d "${node_tmpdir}/wflow-mae-stage.XXXXXX")
+            staged_mae_root="${stage_tmp}/mae_latent_640"
+            mkdir -p "$staged_mae_root" "$(dirname "$local_mae_root")"
+            stage_start=$SECONDS
+            echo "[$(date --iso-8601=seconds)] Staging MAE-640 on $(hostname): ${shared_mae_weight} -> ${local_mae_weight}"
+            cp -p "${SHARED_MAE_ROOT}/metadata.json" "$staged_mae_root/metadata.json"
+            cp -p "$shared_mae_weight" "$staged_mae_root/$MAE_WEIGHT_FILE"
+
+            staged_bytes=$(stat -c %s "$staged_mae_root/$MAE_WEIGHT_FILE")
+            if (( staged_bytes != required_bytes )); then
+                echo "Node-local MAE size mismatch on $(hostname): expected ${required_bytes}, got ${staged_bytes}" >&2
+                exit 1
+            fi
+
+            mv "$staged_mae_root" "$local_mae_root"
+            rmdir "$stage_tmp"
+            echo "[$(date --iso-8601=seconds)] MAE-640 staged on $(hostname) in $((SECONDS - stage_start)) s (${required_bytes} bytes)"
+        else
+            echo "[$(date --iso-8601=seconds)] Reusing staged MAE-640 on $(hostname): ${local_mae_weight}"
+        fi
+
+        export WFLOW_DRIFTING_HF_ROOT="$local_hf_root"
+        echo "Node-local WFLOW_DRIFTING_HF_ROOT=${WFLOW_DRIFTING_HF_ROOT}"
 
         torchrun \
             --nnodes="$NNODES" \

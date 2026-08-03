@@ -418,21 +418,30 @@ def build_feature_model_and_params(
     if not path:
         raise ValueError("`path` is required when use_convnext=False.")
 
-    from utils.init_util import load_init_entry
+    if path.startswith("hf://"):
+        model_name = path[len("hf://") :].strip()
+        if not model_name:
+            raise ValueError("Invalid MAE path, expected `hf://<name>`.")
+        # load_mae_hf already constructs and loads the feature model. Reuse it
+        # directly instead of allocating a second MAE and copying every tensor.
+        feature_model, feature_params, metadata = load_mae_hf(model_name, dir=HF_ROOT)
+    else:
+        from utils.init_util import load_init_entry
 
-    entry, metadata = load_init_entry("mae", path, hf_cache_dir=HF_ROOT)
-    if not metadata:
-        raise ValueError(f"MAE artifact is missing metadata required to rebuild the model: {path}")
-    feature_model = _mae_from_metadata(metadata)
-    missing, unexpected = feature_model.load_state_dict(entry, strict=False)
-    if missing or unexpected:
-        raise ValueError(f"Failed to load MAE weights cleanly. missing={missing[:8]} unexpected={unexpected[:8]}")
+        entry, metadata = load_init_entry("mae", path, hf_cache_dir=HF_ROOT)
+        if not metadata:
+            raise ValueError(f"MAE artifact is missing metadata required to rebuild the model: {path}")
+        feature_model = _mae_from_metadata(metadata)
+        missing, unexpected = feature_model.load_state_dict(entry, strict=False)
+        if missing or unexpected:
+            raise ValueError(f"Failed to load MAE weights cleanly. missing={missing[:8]} unexpected={unexpected[:8]}")
+        feature_params = feature_model.state_dict()
     feature_model.eval()
     for p in feature_model.parameters():
         p.requires_grad_(False)
     if _COMPILE:
         feature_model.encoder = torch.compile(feature_model.encoder, dynamic=True)
-    return feature_model, feature_model.state_dict()
+    return feature_model, feature_params
 
 
 def build_activation_function(
