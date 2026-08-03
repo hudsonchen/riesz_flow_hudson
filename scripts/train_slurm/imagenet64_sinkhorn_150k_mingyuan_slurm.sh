@@ -1,5 +1,5 @@
 #!/bin/bash -l
-#SBATCH --job-name=sinkhorn150k_imagenet64
+#SBATCH --job-name=mingyuan_sinkhorn150k_imagenet64
 #SBATCH --account=airr-p109-dawn-gpu
 #SBATCH --partition=pvc9
 #SBATCH --nodes=1
@@ -40,8 +40,8 @@ export NUMEXPR_NUM_THREADS=1
 
 NGPU=${NGPU:-${SLURM_GPUS_ON_NODE:-4}}
 MASTER_PORT=${MASTER_PORT:-6668}
-CONFIG=${CONFIG:-configs/gen/imagenet64_sinkhorn_150k.yaml}
-WORKDIR=${WORKDIR:-"${RDS_ROOT}/runs/imagenet64_sinkhorn_150k_ps_1"}
+CONFIG=${CONFIG:-configs/gen/imagenet64_sinkhorn_150k_mingyuan.yaml}
+WORKDIR=${WORKDIR:-"${RDS_ROOT}/runs/imagenet64_sinkhorn_150k_mingyuan_ps_1"}
 
 mkdir -p "$WORKDIR"
 
