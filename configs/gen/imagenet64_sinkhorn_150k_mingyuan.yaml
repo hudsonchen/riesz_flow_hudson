@@ -52,13 +52,13 @@ train:
   train_batch_size: 16
   seed: 42
   total_steps: 150000
-  save_per_step: 500
+  save_per_step: 2500
   keep_last: 5
   keep_every: null
   eval_per_step: 500
   eval_samples: 5000
   sanity_samples: 64
-  eval_fid: true
+  eval_fid: false
   eval_isc: false
   eval_prc_recall: false
   pos_per_sample: 64
