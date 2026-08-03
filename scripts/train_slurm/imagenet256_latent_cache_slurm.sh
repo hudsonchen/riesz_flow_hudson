@@ -1,5 +1,5 @@
 #!/bin/bash -l
-#SBATCH --job-name=imagenet256_latents
+#SBATCH --job-name=latents_imagenet256
 #SBATCH --account=airr-p109-dawn-gpu
 #SBATCH --partition=pvc9
 

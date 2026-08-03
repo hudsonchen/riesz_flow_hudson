@@ -1,5 +1,5 @@
 #!/bin/bash -l
-#SBATCH --job-name=imagenet256_B_sliced_riesz
+#SBATCH --job-name=sliced_riesz_B_imagenet256
 #SBATCH --account=airr-p109-dawn-gpu
 #SBATCH --partition=pvc9
 #SBATCH --nodes=2

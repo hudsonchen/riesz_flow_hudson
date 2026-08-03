@@ -1,5 +1,5 @@
 #!/bin/bash -l
-#SBATCH --job-name=imagenet64_sinkhorn
+#SBATCH --job-name=sinkhorn_imagenet64
 #SBATCH --account=airr-p109-dawn-gpu
 #SBATCH --partition=pvc9
 #SBATCH --nodes=1

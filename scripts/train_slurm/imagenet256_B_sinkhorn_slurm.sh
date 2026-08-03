@@ -1,5 +1,5 @@
 #!/bin/bash -l
-#SBATCH --job-name=imagenet256_B_sinkhorn
+#SBATCH --job-name=sinkhorn_B_imagenet256
 #SBATCH --account=airr-p109-dawn-gpu
 #SBATCH --partition=pvc9
 #SBATCH --nodes=4
@@ -7,7 +7,7 @@
 #SBATCH --cpus-per-task=64
 #SBATCH --gpus-per-node=4
 #SBATCH --mem=0
-#SBATCH --time=48:00:00
+#SBATCH --time=2-00:00:00
 #SBATCH --output=%x-%j.out
 #SBATCH --error=%x-%j.err
 
