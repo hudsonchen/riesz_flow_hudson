@@ -689,12 +689,23 @@ def main_gen(config, output_dir="runs"):
     if bool(feature_cfg.get("use_mae", True)) and not mae_path:
         raise ValueError("feature.mae_path (or feature.load_dict.hf_model_name / feature.load_dict.path) is required when use_mae=true.")
 
+    feature_load_started = time.perf_counter()
+    log_for_0(
+        "Loading feature extractors (MAE=%s, mae_path=%s, ConvNeXt=%s)...",
+        bool(feature_cfg.get("use_mae", True)),
+        mae_path or "<disabled>",
+        bool(feature_cfg.get("use_convnext", False)),
+    )
     activation_fn, variables = build_activation_function(
         mae_path=mae_path,
         use_convnext=bool(feature_cfg.get("use_convnext", False)),
         convnext_bf16=bool(feature_cfg.get("convnext_bf16", False)),
         use_mae=bool(feature_cfg.get("use_mae", True)),
         postprocess_fn=postprocess_fn_noclip,
+    )
+    log_for_0(
+        "Feature extractors loaded in %.1f s; preparing generator, DDP, optimizer, and checkpoint restore",
+        time.perf_counter() - feature_load_started,
     )
 
     train_gen(

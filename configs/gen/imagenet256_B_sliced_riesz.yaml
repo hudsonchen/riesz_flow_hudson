@@ -65,6 +65,7 @@ train:
   positive_bank_size: 128
   negative_bank_size: 1000
   push_per_step: 128
+  push_at_resume: 1
   grad_accum_steps: 8
   max_grad_norm: 2.0
 

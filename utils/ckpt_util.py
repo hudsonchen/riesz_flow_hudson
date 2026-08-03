@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import time
 from typing import Any, Dict, Optional
 
 import torch
 
-from utils.dist_util import barrier, unwrap_ddp
+from utils.dist_util import barrier, process_count, unwrap_ddp
 from utils.logging import is_rank_zero, log_for_0
 
 
@@ -46,6 +47,7 @@ def restore_checkpoint(step=None, state=None, workdir: Optional[str] = None):
 
     ckpts = _list_ckpts(ckpt_dir)
     if not ckpts:
+        log_for_0("No checkpoint files found in %s", str(ckpt_dir))
         return state
 
     if step is None:
@@ -53,13 +55,36 @@ def restore_checkpoint(step=None, state=None, workdir: Optional[str] = None):
     else:
         cand = [p for p in ckpts if _extract_step(p) == step]
         if not cand:
+            log_for_0("Checkpoint step %d not found in %s", step, str(ckpt_dir))
             return state
         target_path = cand[-1]
 
+    checkpoint_bytes = target_path.stat().st_size
+    load_started = time.perf_counter()
+    log_for_0(
+        "Restoring checkpoint from %s (%.2f GiB, world_size=%d; each rank reads the file)",
+        str(target_path),
+        checkpoint_bytes / (1024**3),
+        process_count(),
+    )
     payload = torch.load(target_path, map_location="cpu", weights_only=False)
+    deserialize_seconds = time.perf_counter() - load_started
+    payload_step = int(payload.get("step", _extract_step(target_path)))
+    log_for_0(
+        "Checkpoint file deserialized at step %d in %.1f s; loading model state%s",
+        payload_step,
+        deserialize_seconds,
+        ", EMA state, and optimizer state" if state is not None else "",
+    )
     if state is None:
+        log_for_0(
+            "Checkpoint restore complete at step %d in %.1f s",
+            payload_step,
+            time.perf_counter() - load_started,
+        )
         return payload
 
+    state_load_started = time.perf_counter()
     unwrap_ddp(state.model).load_state_dict(payload["model"], strict=True)
     if (
         getattr(state, "ema_model", None) is not None
@@ -70,6 +95,16 @@ def restore_checkpoint(step=None, state=None, workdir: Optional[str] = None):
     state.optimizer.load_state_dict(payload["optimizer"])
     state.step = int(payload.get("step", 0))
     state.ema_decay = float(payload.get("ema_decay", getattr(state, "ema_decay", 0.999)))
+    state_load_seconds = time.perf_counter() - state_load_started
+    log_for_0(
+        "Checkpoint restore complete: step=%d, ema_decay=%.6g, "
+        "deserialize=%.1f s, state_load=%.1f s, total=%.1f s",
+        state.step,
+        state.ema_decay,
+        deserialize_seconds,
+        state_load_seconds,
+        time.perf_counter() - load_started,
+    )
     return state
 
 
