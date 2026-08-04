@@ -4,7 +4,7 @@
 #SBATCH --partition=pvc9
 #SBATCH --nodes=2
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=64
+#SBATCH --cpus-per-task=96
 #SBATCH --gpus-per-node=4
 #SBATCH --mem=128G
 #SBATCH --time=24:00:00

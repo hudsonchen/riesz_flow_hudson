@@ -4,7 +4,7 @@
 #SBATCH --partition=pvc9
 #SBATCH --nodes=4
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=64
+#SBATCH --cpus-per-task=96
 #SBATCH --gpus-per-node=4
 #SBATCH --mem=128G
 #SBATCH --time=1-12:00:00
@@ -122,7 +122,7 @@ srun \
     --export=ALL \
     --ntasks="$NNODES" \
     --ntasks-per-node=1 \
-    --cpus-per-task="${SLURM_CPUS_PER_TASK:-64}" \
+    --cpus-per-task="${SLURM_CPUS_PER_TASK:-96}" \
     --kill-on-bad-exit=1 \
     bash -c '
         set -euo pipefail
