@@ -6,7 +6,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=96
 #SBATCH --gpus-per-node=4
-#SBATCH --mem=128G
+# Full 4-GPU/96-core Dawn nodes receive site-proportional memory; do not cap it.
 #SBATCH --time=1-12:00:00
 #SBATCH --output=%x-%j.out
 #SBATCH --error=%x-%j.err
@@ -103,10 +103,12 @@ echo "Workdir:        ${WORKDIR}"
 echo "Nodes:          ${NNODES}"
 echo "GPUs per node:  ${NGPU}"
 echo "Total GPUs:     $((NNODES * NGPU))"
+echo "Slurm memory:   per-node=${SLURM_MEM_PER_NODE:-site-default} MB, per-CPU=${SLURM_MEM_PER_CPU:-site-default} MB"
 echo "Master address: ${MASTER_ADDR}"
 echo "Master port:    ${MASTER_PORT}"
 
-export REPO_DIR RDS_ROOT NNODES NGPU MASTER_ADDR MASTER_PORT CONFIG RUN_NAME WORKDIR RANK_ENTRYPOINT
+export SHARED_MAE_ROOT="${MAE_ROOT}"
+export REPO_DIR RDS_ROOT NNODES NGPU MASTER_ADDR MASTER_PORT CONFIG RUN_NAME WORKDIR RANK_ENTRYPOINT SHARED_MAE_ROOT
 export DRIFT_COMPILE=${DRIFT_COMPILE:-1}
 export DRIFT_FEAT_CHUNK=${DRIFT_FEAT_CHUNK:-1}
 export NCCL_DEBUG=${NCCL_DEBUG:-WARN}
@@ -129,6 +131,37 @@ srun \
         cd "$REPO_DIR"
 
         echo "Host: $(hostname), node rank: ${SLURM_NODEID}"
+
+        # One srun task runs on each node.  Stage the unchanged MAE artifact
+        # once here, before torchrun creates four local workers, so RDS serves
+        # one 10.75-GiB copy per node instead of one copy per GPU rank.
+        node_cache_root=${WFLOW_NODE_CACHE_ROOT:-"/local/${USER}/wflow-${SLURM_JOB_ID}"}
+        node_hf_root="${node_cache_root}/drifting_hf_root"
+        node_mae_root="${node_hf_root}/models/mae/jax/mae_latent_640"
+        mkdir -p "$node_mae_root"
+
+        stage_started=$SECONDS
+        echo "[$(hostname)] Staging MAE-640 to node-local storage: ${node_mae_root}"
+        cp -aL "${SHARED_MAE_ROOT}/." "${node_mae_root}/"
+
+        test -f "${node_mae_root}/metadata.json" || {
+            echo "Node-local MAE metadata missing after staging: ${node_mae_root}/metadata.json" >&2
+            exit 1
+        }
+        if [[ -f "${SHARED_MAE_ROOT}/ema_params.msgpack" ]]; then
+            weight_name=ema_params.msgpack
+        else
+            weight_name=ema_params.pt
+        fi
+        shared_weight_bytes=$(stat -c %s "${SHARED_MAE_ROOT}/${weight_name}")
+        local_weight_bytes=$(stat -c %s "${node_mae_root}/${weight_name}")
+        if [[ "$local_weight_bytes" != "$shared_weight_bytes" ]]; then
+            echo "Node-local MAE size mismatch: shared=${shared_weight_bytes}, local=${local_weight_bytes}" >&2
+            exit 1
+        fi
+        echo "[$(hostname)] Node-local MAE staging complete in $((SECONDS - stage_started)) s (${local_weight_bytes} bytes)"
+
+        export WFLOW_DRIFTING_HF_ROOT="$node_hf_root"
 
         torchrun \
             --nnodes="$NNODES" \

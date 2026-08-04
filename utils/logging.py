@@ -14,6 +14,11 @@ from PIL import Image
 
 from utils.dist_util import process_index
 
+# Abseil defaults to warning-only output when this project is launched through
+# argparse rather than absl.app.  Enable INFO so startup/checkpoint timing from
+# log_for_0() is not silently discarded.
+absl_logging.set_verbosity(absl_logging.INFO)
+
 
 def is_rank_zero() -> bool:
     return process_index() == 0

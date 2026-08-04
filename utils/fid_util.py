@@ -12,7 +12,6 @@ from dataset.dataset import epoch0_sampler
 from utils.dist_util import local_device, process_allgather, process_count, process_index
 from utils.env import IMAGENET_FID_NPZ, IMAGENET_PR_NPZ, TORCH_HUB_DIR
 from utils.logging import is_rank_zero
-from tqdm import tqdm
 
 if os.path.isdir(TORCH_HUB_DIR) or not os.path.exists(TORCH_HUB_DIR):
     os.makedirs(TORCH_HUB_DIR, exist_ok=True)
@@ -214,6 +213,7 @@ def evaluate_fid(
     eval_isc=True,
     eval_fid=True,
     rng_eval=None,
+    preview_samples=None,
 ):
     """Distributed FID evaluation.
 
@@ -233,10 +233,7 @@ def evaluate_fid(
     eval_iter = epoch0_sampler(eval_loader)
     all_samples = []
     cur = 0
-    metrics_enabled = eval_fid or eval_isc or eval_prc_recall
-    progress_desc = "FID gen" if metrics_enabled else "Preview gen"
-    it = tqdm(enumerate(eval_iter), desc=progress_desc) if is_rank_zero() else enumerate(eval_iter)
-    for i, batch in it:
+    for i, batch in enumerate(eval_iter):
         gen_samples = gen_func(batch, **gen_params, rng=int(rng_eval) + i)
 
         if torch.is_tensor(gen_samples):
@@ -251,6 +248,17 @@ def evaluate_fid(
 
     local_images = np.concatenate(all_samples, axis=0)[:samples_per_rank]
 
+    if preview_samples is None:
+        preview_images = local_images[:64]
+    else:
+        # Preview generation is distributed, so gather a small, bounded shard
+        # from every rank rather than logging only rank 0's local images.
+        preview_count = min(max(1, int(preview_samples)), int(num_samples))
+        preview_per_rank = (preview_count + world - 1) // world
+        preview_t = torch.from_numpy(local_images[:preview_per_rank].astype(np.float32))
+        preview_images = process_allgather(preview_t).numpy()[:preview_count]
+        preview_images = np.clip(preview_images, 0, 255).astype(np.uint8)
+
     # Preview-only evaluation is useful for reduced-resolution pilots that do
     # not have matching reference statistics. Avoid loading Inception and save
     # the generated grid through the normal logger.
@@ -260,7 +268,7 @@ def evaluate_fid(
             logger.log_dict(
                 {f"{log_folder}/{log_prefix}_{k}": v for k, v in metrics.items()}
             )
-            logger.log_image(f"{log_folder}/{log_prefix}_viz", local_images[:64])
+            logger.log_image(f"{log_folder}/{log_prefix}_viz", preview_images)
         return metrics
 
     # --- 2. Each rank extracts Inception features locally ---
@@ -304,6 +312,6 @@ def evaluate_fid(
 
         metrics["fid_time"] = float(time.time() - start)
         logger.log_dict({f"{log_folder}/{log_prefix}_{k}": v for k, v in metrics.items()})
-        logger.log_image(f"{log_folder}/{log_prefix}_viz", local_images[:64])
+        logger.log_image(f"{log_folder}/{log_prefix}_viz", preview_images)
 
     return metrics

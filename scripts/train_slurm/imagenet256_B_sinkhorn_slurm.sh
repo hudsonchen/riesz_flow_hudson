@@ -6,7 +6,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=96
 #SBATCH --gpus-per-node=4
-#SBATCH --mem=128G
+# Full 4-GPU/96-core Dawn nodes receive site-proportional memory; do not cap it.
 #SBATCH --time=1-12:00:00
 #SBATCH --output=%x-%j.out
 #SBATCH --error=%x-%j.err

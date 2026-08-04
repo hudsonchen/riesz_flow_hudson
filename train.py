@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
+_TRAIN_PROCESS_STARTED = time.perf_counter()
+
 if os.environ.get("SLURM_JOB_ID") and "LOCAL_RANK" in os.environ:
     cache_root = Path(os.environ.get("SLURM_TMPDIR", "/tmp"))
     cache_tag = (
@@ -408,6 +410,7 @@ def train_gen(
     save_per_step=10000,
     eval_per_step=5000,
     eval_samples=50000,
+    preview_samples=None,
     sanity_samples=500,
     eval_decode_batch_size=1,
     eval_fid=False,
@@ -590,6 +593,13 @@ def train_gen(
         )
 
         total_time = time.time() - start_time
+        if step == initial_step:
+            log_for_0(
+                "First optimizer step complete: step=%d, step_time=%.1f s, process_elapsed=%.1f s",
+                int(state.step),
+                total_time,
+                time.perf_counter() - _TRAIN_PROCESS_STARTED,
+            )
         metrics["total_time"] = total_time
         metrics["process_time"] = process_time
         metrics["kimg"] = (step + 1) * positive_samples.shape[0] / 1000.0
@@ -640,6 +650,7 @@ def train_gen(
                     eval_fid=eval_fid,
                     eval_isc=eval_isc,
                     eval_prc_recall=eval_prc_recall,
+                    preview_samples=preview_samples,
                 )
                 fid_val = result.get("fid", float("inf"))
                 if fid_val < round_best_fid:
