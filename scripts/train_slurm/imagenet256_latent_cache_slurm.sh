@@ -7,7 +7,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=24
 #SBATCH --gres=gpu:1
-#SBATCH --mem=128G
+# Use Dawn's site-default proportional memory allocation; do not cap it.
 #SBATCH --time=24:00:00
 
 #SBATCH --output=%x-%j.out

@@ -133,33 +133,57 @@ srun \
         echo "Host: $(hostname), node rank: ${SLURM_NODEID}"
 
         # One srun task runs on each node.  Stage the unchanged MAE artifact
-        # once here, before torchrun creates four local workers, so RDS serves
-        # one 10.75-GiB copy per node instead of one copy per GPU rank.
-        node_cache_root=${WFLOW_NODE_CACHE_ROOT:-"/local/${USER}/wflow-${SLURM_JOB_ID}"}
+        # once under /tmp on each node before torchrun creates four workers,
+        # so RDS serves one 10.75-GiB copy per node instead of one copy per GPU
+        # rank.  /tmp is node-local in this launcher; fail clearly if the
+        # allocated node does not provide enough writable space.
+        node_cache_root=${WFLOW_NODE_CACHE_ROOT:-"/tmp/wflow-${SLURM_JOB_ID}-node-${SLURM_NODEID}"}
         node_hf_root="${node_cache_root}/drifting_hf_root"
         node_mae_root="${node_hf_root}/models/mae/jax/mae_latent_640"
-        mkdir -p "$node_mae_root"
 
-        stage_started=$SECONDS
-        echo "[$(hostname)] Staging MAE-640 to node-local storage: ${node_mae_root}"
-        cp -aL "${SHARED_MAE_ROOT}/." "${node_mae_root}/"
+        if [[ -z "${WFLOW_NODE_CACHE_ROOT:-}" ]]; then
+            remove_node_cache() {
+                rm -rf -- "$node_cache_root"
+            }
+            trap remove_node_cache EXIT
+        fi
 
-        test -f "${node_mae_root}/metadata.json" || {
-            echo "Node-local MAE metadata missing after staging: ${node_mae_root}/metadata.json" >&2
-            exit 1
-        }
         if [[ -f "${SHARED_MAE_ROOT}/ema_params.msgpack" ]]; then
             weight_name=ema_params.msgpack
         else
             weight_name=ema_params.pt
         fi
         shared_weight_bytes=$(stat -c %s "${SHARED_MAE_ROOT}/${weight_name}")
-        local_weight_bytes=$(stat -c %s "${node_mae_root}/${weight_name}")
-        if [[ "$local_weight_bytes" != "$shared_weight_bytes" ]]; then
-            echo "Node-local MAE size mismatch: shared=${shared_weight_bytes}, local=${local_weight_bytes}" >&2
+        required_bytes=$((shared_weight_bytes + 1073741824))
+
+        if ! mkdir -p "$node_mae_root"; then
+            echo "Cannot create MAE staging directory on $(hostname): ${node_mae_root}" >&2
             exit 1
         fi
-        echo "[$(hostname)] Node-local MAE staging complete in $((SECONDS - stage_started)) s (${local_weight_bytes} bytes)"
+        read -r available_bytes < <(df -B1 --output=avail "$node_cache_root" | tail -n 1)
+        if (( available_bytes < required_bytes )); then
+            echo "Insufficient staging space on $(hostname): path=${node_cache_root}, available=${available_bytes} bytes, required=${required_bytes} bytes" >&2
+            exit 1
+        fi
+
+        stage_started=$SECONDS
+        echo "[$(hostname)] Staging MAE-640 for node ${SLURM_NODEID}: ${node_mae_root}"
+        echo "[$(hostname)] Staging filesystem has ${available_bytes} bytes available; ${required_bytes} bytes required"
+        cp -aL \
+            "${SHARED_MAE_ROOT}/metadata.json" \
+            "${SHARED_MAE_ROOT}/${weight_name}" \
+            "${node_mae_root}/"
+
+        test -f "${node_mae_root}/metadata.json" || {
+            echo "Staged MAE metadata missing: ${node_mae_root}/metadata.json" >&2
+            exit 1
+        }
+        local_weight_bytes=$(stat -c %s "${node_mae_root}/${weight_name}")
+        if [[ "$local_weight_bytes" != "$shared_weight_bytes" ]]; then
+            echo "Staged MAE size mismatch: shared=${shared_weight_bytes}, staged=${local_weight_bytes}" >&2
+            exit 1
+        fi
+        echo "[$(hostname)] MAE staging complete in $((SECONDS - stage_started)) s (${local_weight_bytes} bytes)"
 
         export WFLOW_DRIFTING_HF_ROOT="$node_hf_root"
 
