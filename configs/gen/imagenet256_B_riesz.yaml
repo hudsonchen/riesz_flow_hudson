@@ -1,6 +1,6 @@
 logging:
   use_wandb: false
-  log_every_k: 1000
+  log_every_k: 20
 
 dataset:
   resolution: 256
@@ -52,7 +52,7 @@ train:
   # This checkout derives duration from loader epochs, so 320 gives 200,160
   # optimizer steps, matching the upstream fixed 200k-step B/2 budget.
   num_epochs: 320
-  save_per_step: 2000
+  save_per_step: 1000
   keep_last: null
   keep_every: null
   eval_per_step: 5000
