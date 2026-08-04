@@ -9,7 +9,7 @@ dataset:
   use_cache: false
   num_classes: 1000
   eval_split: train
-  batch_size: 256
+  batch_size_per_gpu: 256
   eval_batch_size: 64
   kwargs:
     num_workers: 8
@@ -17,12 +17,12 @@ dataset:
     prefetch_factor: 2
 
 model:
-  cond_dim: 384
+  cond_dim: 192
   input_size: 8
   in_channels: 4
-  patch_size: 1
-  hidden_size: 384
-  depth: 9
+  patch_size: 2
+  hidden_size: 192
+  depth: 6
   num_heads: 6
   mlp_ratio: 4.0
   out_channels: 4
@@ -30,67 +30,73 @@ model:
   use_swiglu: true
   use_rope: true
   use_rmsnorm: true
-  n_cls_tokens: 8
+  n_cls_tokens: 4
   noise_classes: 64
   noise_coords: 8
   use_bf16: true
-  use_remat: false
   attn_fp32: true
 
 optimizer:
   lr_schedule:
-    learning_rate: 0.0000498453
-    warmup_steps: 2000
-    lr_schedule: "cosine"
-    total_steps: 150000
+    learning_rate: 0.0002
+    warmup_steps: 500
+    lr_schedule: "const"
   weight_decay: 0.01
   adam_b1: 0.9
   adam_b2: 0.95
 
 train:
   diverse_noise: true
-  train_batch_size: 16
+  train_batch_size: 8
   seed: 42
-  total_steps: 150000
-  save_per_step: 2500
-  keep_last: null
-  keep_every: null
+  num_epochs: 150
+  save_per_step: 500
+  keep_every: 2500
   eval_per_step: 500
-  eval_samples: 5000
+  eval_samples: 64
   sanity_samples: 64
   eval_fid: false
   eval_isc: false
   eval_prc_recall: false
-  pos_per_sample: 64
-  neg_per_sample: 32
-  positive_bank_size: 128
-  negative_bank_size: 1000
+
+  pos_per_sample: 16
+  neg_per_sample: 8
+  positive_bank_size: 32
+  negative_bank_size: 256
+
   forward_dict:
-    gen_per_label: 64
+    gen_per_label: 16
     cfg_min: 1.0
     cfg_max: 4.0
     neg_cfg_pw: 3.0
+
   activation_kwargs:
-    patch_mean_size: [2, 4]
-    patch_std_size: [2, 4]
-    use_std: true
-    use_mean: true
-    every_k_block: 2
-  loss_kwargs:
-    R_list: [0.05]
-  cfg_list: [1.0, 1.5, 2.0, 2.5, 3.0, 3.5]
+    patch_mean_size: []
+    patch_std_size: []
+    use_std: false
+    use_mean: false
+    every_k_block: .inf
+
+  cfg_list: [1.0, 1.5, 2.0, 2.5]
   ema_decay: 0.999
   push_per_step: 256
-  # On checkpoint resume, perform one ordinary memory-bank refill. Leaving
-  # this unset inherits 3000 and stalls while every rank VAE-encodes 768K images.
+
+  # Refill one ordinary data batch after restoring a checkpoint.
   push_at_resume: 1
-  grad_accum_steps: 1
+
+  grad_accum_steps: 2
   max_grad_norm: 2.0
 
   ot_mode: "none"
   use_riesz: true
+
   riesz_kwargs:
     epsilon: 1.0e-6
+    self_support_mode: "bank"
+    generated_bank_size: 16
+    generated_bank_samples: 16
+    generated_bank_dtype: "float16"
+    self_repulsion_weight: 0.5
 
 feature:
   mae_path: "hf://mae_latent_256"
