@@ -104,16 +104,28 @@ class GeneratedFeatureBank:
             raise ValueError("n_samples must be positive")
 
         labels_cpu = labels.detach().to("cpu", dtype=torch.long)
-        current_cpu = current.detach().to("cpu", dtype=self.storage_dtype)
         branch_store = self._storage.get(str(branch), {})
         outputs = []
 
         for b, label in enumerate(labels_cpu.tolist()):
             source = branch_store.get(int(label))
             if source is None or source.shape[0] == 0:
-                source = current_cpu[b]
-            indices = torch.randint(0, source.shape[0], (n_samples,))
-            outputs.append(source.index_select(0, indices))
+                # Keep the first-seen-class fallback on the accelerator. The
+                # current features are copied to CPU once later by add().
+                source = current[b].detach()
+                indices = torch.randint(
+                    0, source.shape[0], (n_samples,), device=source.device
+                )
+                outputs.append(source.index_select(0, indices))
+            else:
+                # Historical support lives on CPU. Transfer only the selected
+                # particles, not the full live generated-feature tensor.
+                indices = torch.randint(0, source.shape[0], (n_samples,))
+                outputs.append(
+                    source.index_select(0, indices).to(
+                        device=device, dtype=current.dtype
+                    )
+                )
 
         return torch.stack(outputs, dim=0).to(device=device, dtype=current.dtype)
 
