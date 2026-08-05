@@ -63,6 +63,11 @@ echo "Cache root:    ${WFLOW_CACHE_ROOT}"
 echo "Workdir:       ${WORKDIR}"
 echo "GPUs:          ${NGPU}"
 
+# Keep oneCCL under the torchrun process topology rather than allowing its
+# MPI/Hydra defaults to attach worker processes to Slurm's PMI world.
+export CCL_PROCESS_LAUNCHER=torchrun
+export CCL_ATL_TRANSPORT=ofi
+
 DRIFT_COMPILE=${DRIFT_COMPILE:-0} \
 DRIFT_FEAT_CHUNK=${DRIFT_FEAT_CHUNK:-1} \
 NCCL_DEBUG=${NCCL_DEBUG:-WARN} \
