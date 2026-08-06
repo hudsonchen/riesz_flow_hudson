@@ -1,5 +1,5 @@
 #!/bin/bash -l
-#SBATCH --job-name=riesz_genbank_imagenet64
+#SBATCH --job-name=mingyuan_riesz_abllr_imagenet64
 #SBATCH --account=airr-p109-dawn-gpu
 #SBATCH --partition=pvc9
 #SBATCH --nodes=1
@@ -40,15 +40,15 @@ export NUMEXPR_NUM_THREADS=1
 
 NGPU=${NGPU:-${SLURM_GPUS_ON_NODE:-4}}
 MASTER_PORT=${MASTER_PORT:-6668}
-CONFIG=${CONFIG:-configs/gen/imagenet64_riesz_generated_bank.yaml}
-WORKDIR=${WORKDIR:-"${RDS_ROOT}/runs/imagenet64_riesz_generated_bank_mingyuan_matched_ps_1"}
+CONFIG=${CONFIG:-configs/gen/imagenet64_riesz_150k_mingyuan_ablation_lr.yaml}
+WORKDIR=${WORKDIR:-"${RDS_ROOT}/runs/imagenet64_riesz_150k_mingyuan_ablation_lr_ps_1"}
 
 test -f "$CONFIG" || {
     echo "Missing config: $CONFIG" >&2
     exit 1
 }
-test -f train_riesz_support.py || {
-    echo "Missing training entrypoint: ${REPO_DIR}/train_riesz_support.py" >&2
+test -f train.py || {
+    echo "Missing training entrypoint: ${REPO_DIR}/train.py" >&2
     exit 1
 }
 
@@ -63,8 +63,7 @@ echo "Cache root:    ${WFLOW_CACHE_ROOT}"
 echo "Workdir:       ${WORKDIR}"
 echo "GPUs:          ${NGPU}"
 
-# Keep oneCCL under the torchrun process topology rather than allowing its
-# MPI/Hydra defaults to attach worker processes to Slurm's PMI world.
+# Keep oneCCL under torchrun's process topology instead of Slurm PMI.
 export CCL_PROCESS_LAUNCHER=torchrun
 export CCL_ATL_TRANSPORT=ofi
 
@@ -76,7 +75,7 @@ torchrun \
     --nnodes=1 \
     --nproc_per_node="$NGPU" \
     --master_port="$MASTER_PORT" \
-    train_riesz_support.py \
+    train.py \
     --config "$CONFIG" \
     --workdir "$WORKDIR"
 

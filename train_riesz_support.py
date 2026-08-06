@@ -230,11 +230,6 @@ def train_step(
     riesz_cfg.pop("generated_bank_dtype", None)
 
     riesz_loss_fn = sliced_riesz_loss if use_sliced_riesz else direct_riesz_loss
-    if use_sliced_riesz and riesz_self_support_mode != "same_batch":
-        raise ValueError(
-            "fresh/bank self support is implemented only for direct Riesz, "
-            "not riesz_loss_sliced"
-        )
     if riesz_self_support_mode == "bank" and generated_feature_bank is None:
         raise ValueError(
             "self_support_mode='bank' requires generated_feature_bank"
@@ -385,6 +380,8 @@ def train_step(
                             weight_gen=torch.ones_like(feature_gen[:, :, 0]),
                             weight_pos=weight_pos,
                             weight_neg=weight_neg,
+                            self_support=self_support,
+                            use_sliced=True,
                             **riesz_cfg,
                         )
                     else:
