@@ -1,5 +1,5 @@
 #!/bin/bash -l
-#SBATCH --job-name=mingyuan_riesz_abllr_imagenet64
+#SBATCH --job-name=direct_riesz_no_support_const_lr_imagenet64
 #SBATCH --account=airr-p109-dawn-gpu
 #SBATCH --partition=pvc9
 #SBATCH --nodes=1
@@ -40,8 +40,8 @@ export NUMEXPR_NUM_THREADS=1
 
 NGPU=${NGPU:-${SLURM_GPUS_ON_NODE:-4}}
 MASTER_PORT=${MASTER_PORT:-6668}
-CONFIG=${CONFIG:-configs/gen/imagenet64_riesz_150k_mingyuan_ablation_lr.yaml}
-WORKDIR=${WORKDIR:-"${RDS_ROOT}/runs/imagenet64_riesz_150k_mingyuan_ablation_lr_ps_1"}
+CONFIG=${CONFIG:-configs/gen/imagenet64_direct_riesz_no_support_const_lr.yaml}
+WORKDIR=${WORKDIR:-"${RDS_ROOT}/runs/imagenet64_direct_riesz_no_support_const_lr_ps_1"}
 
 test -f "$CONFIG" || {
     echo "Missing config: $CONFIG" >&2

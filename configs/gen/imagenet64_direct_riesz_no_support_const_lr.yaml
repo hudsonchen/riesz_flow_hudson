@@ -39,7 +39,7 @@ model:
 
 optimizer:
   lr_schedule:
-    # Match the official W-Flow ImageNet256 single-node ablation schedule.
+    # Warm up to the requested constant learning rate, then hold it fixed.
     learning_rate: 0.0002
     warmup_steps: 5000
     lr_schedule: "const"
