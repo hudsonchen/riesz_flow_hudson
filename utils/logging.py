@@ -4,6 +4,8 @@ import hashlib
 import json
 import math
 import os
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -12,7 +14,7 @@ import torch
 from absl import logging as absl_logging
 from PIL import Image
 
-from utils.dist_util import process_index
+from utils.dist_util import accelerator_synchronize, process_index
 
 # Abseil defaults to warning-only output when this project is launched through
 # argparse rather than absl.app.  Enable INFO so startup/checkpoint timing from
@@ -31,6 +33,76 @@ def log_for_0(msg, *args, **kwargs):
 
 def log_for_all(msg):
     absl_logging.info("[Rank %s] %s", process_index(), msg)
+
+
+class TrainingTimeTracker:
+    """Persist synchronized training-loop wall time across resumed sessions."""
+
+    def __init__(self, workdir: str, initial_step: int, total_steps: int) -> None:
+        self.path = Path(workdir).resolve() / "log" / "training_time.json"
+        self.initial_step = int(initial_step)
+        self.total_steps = int(total_steps)
+        self.session_started_at_utc = datetime.now(timezone.utc).isoformat()
+        self._started_at: Optional[float] = None
+        self._accumulated_before_session = self._load_accumulated_seconds()
+
+    def _load_accumulated_seconds(self) -> float:
+        if not is_rank_zero() or self.initial_step <= 0 or not self.path.exists():
+            return 0.0
+        try:
+            previous = json.loads(self.path.read_text(encoding="utf-8"))
+            previous_step = int(previous.get("completed_steps", -1))
+            previous_seconds = float(previous.get("accumulated_training_seconds", 0.0))
+        except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            log_for_0("Could not read prior training time from %s: %s", self.path, exc)
+            return 0.0
+        if 0 <= previous_step <= self.initial_step and previous_seconds >= 0.0:
+            return previous_seconds
+        log_for_0(
+            "Ignoring training time in %s because its completed_steps=%d is incompatible with resume step=%d",
+            self.path,
+            previous_step,
+            self.initial_step,
+        )
+        return 0.0
+
+    def start(self) -> None:
+        accelerator_synchronize()
+        self._started_at = time.perf_counter()
+
+    def save(self, completed_steps: int, status: str) -> Optional[Dict[str, Any]]:
+        if self._started_at is None:
+            raise RuntimeError("TrainingTimeTracker.start() must be called before save()")
+        if status not in {"running", "complete"}:
+            raise ValueError(f"Unsupported training-time status: {status}")
+
+        accelerator_synchronize()
+        session_seconds = time.perf_counter() - self._started_at
+        accumulated_seconds = self._accumulated_before_session + session_seconds
+        if not is_rank_zero():
+            return None
+
+        payload: Dict[str, Any] = {
+            "schema_version": 1,
+            "scope": "training_loop_including_checkpoint_and_evaluation",
+            "status": status,
+            "session_initial_step": self.initial_step,
+            "completed_steps": int(completed_steps),
+            "target_steps": self.total_steps,
+            "session_training_seconds": session_seconds,
+            "accumulated_training_seconds": accumulated_seconds,
+            "accumulated_training_hours": accumulated_seconds / 3600.0,
+            "session_started_at_utc": self.session_started_at_utc,
+            "updated_at_utc": datetime.now(timezone.utc).isoformat(),
+        }
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path = self.path.with_suffix(".json.tmp")
+        temporary_path.write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        os.replace(temporary_path, self.path)
+        return payload
 
 
 class WandbLogger:

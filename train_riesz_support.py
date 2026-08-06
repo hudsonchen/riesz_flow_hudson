@@ -28,7 +28,7 @@ from utils.dist_util import accelerator_empty_cache, maybe_ddp_model, process_co
 from utils.env import HF_ROOT
 from utils.fid_util import evaluate_fid
 from utils.init_util import maybe_init_state_params
-from utils.logging import is_rank_zero, log_for_0
+from utils.logging import TrainingTimeTracker, is_rank_zero, log_for_0
 from utils.misc import load_config, profile_func, run_init, seed_everything
 from utils.model_builder import build_model_dict
 
@@ -652,6 +652,8 @@ def train_gen(
     # batches. Resume at the matching point in the epoch sequence.
     train_iter = infinite_sampler(train_loader, step * loader_batches_per_step)
     _ot_kw = dict(ot_kwargs) if ot_kwargs else {}
+    training_time = TrainingTimeTracker(workdir, initial_step=initial_step, total_steps=total_steps)
+    training_time.start()
 
     for step in pbar:
         start_time = time.time()
@@ -743,7 +745,8 @@ def train_gen(
         logger.log_dict(metrics)
         step += 1
 
-        if step % save_per_step == 0 or step == total_steps:
+        checkpoint_due = step % save_per_step == 0 or step == total_steps
+        if checkpoint_due:
             save_checkpoint(state, keep=keep_last, keep_every=keep_every, workdir=workdir)
             if is_rank_zero():
                 save_params_ema_artifact(
@@ -752,6 +755,7 @@ def train_gen(
                     kind="gen",
                     model_config=_generator_model_config(state.model),
                 )
+            training_time.save(completed_steps=int(state.step), status="running")
 
         if (step % eval_per_step == 0) or (step == 1) or (step == total_steps):
             accelerator_empty_cache()
@@ -786,6 +790,13 @@ def train_gen(
                 if is_rank_zero():
                     logger.log_dict({"best_fid": round_best_fid, "best_cfg": round_best_cfg})
 
+    timing = training_time.save(completed_steps=int(state.step), status="complete")
+    if timing is not None:
+        log_for_0(
+            "Training time saved to %s (accumulated %.2f hours)",
+            training_time.path,
+            timing["accumulated_training_hours"],
+        )
     logger.finish()
     del model, eval_loader, train_loader, state
     gc.collect()
