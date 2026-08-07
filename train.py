@@ -36,6 +36,7 @@ from dataset.dataset import get_postprocess_fn, infinite_sampler
 from drift_loss import drift_loss
 from drift_loss_ot import drift_loss_ot
 from riesz_loss import riesz_loss as direct_riesz_loss
+from riesz_rms import riesz_loss as rms_riesz_loss
 from riesz_loss_sliced import riesz_loss as sliced_riesz_loss
 from memory_bank import ArrayMemoryBank
 from models.mae_model import build_activation_function
@@ -145,8 +146,14 @@ def train_step(
     n_gen = int(gen_per_label)
     n_uncond = negative_samples.shape[1]
 
-    riesz_loss_fn = direct_riesz_loss
-    if bool((riesz_kwargs or {}).get("use_sliced", False)):
+    riesz_cfg = dict(riesz_kwargs or {})
+    use_rms_riesz = bool(riesz_cfg.pop("use_rms", False))
+    use_sliced_riesz = bool(riesz_cfg.pop("use_sliced", False))
+    if use_sliced_riesz:
+        riesz_cfg["use_sliced"] = True
+
+    riesz_loss_fn = rms_riesz_loss if use_rms_riesz else direct_riesz_loss
+    if use_sliced_riesz and not use_rms_riesz:
         riesz_loss_fn = sliced_riesz_loss
 
     uncond_w = (cfg - 1.0) * (n_gen - 1) / max(1, n_uncond)
@@ -267,7 +274,7 @@ def train_step(
                         weight_gen=torch.ones_like(feature_gen[:, :, 0]),
                         weight_pos=weight_pos,
                         weight_neg=weight_neg,
-                        **(riesz_kwargs or {}),
+                        **riesz_cfg,
                     )
                 else:
                     feature_pos = rearrange(feature_pos, "b x f d -> (b f) x d")

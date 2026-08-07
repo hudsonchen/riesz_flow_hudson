@@ -87,11 +87,11 @@ def _sample_unit_directions(
 
 def _full_riesz_terms(
     gen_scaled: torch.Tensor,
-    self_scaled: torch.Tensor,
+    gen_pair_scaled: torch.Tensor,
     pos_scaled: torch.Tensor,
     neg_scaled: torch.Tensor,
     weight_gen: torch.Tensor,
-    weight_self_support: torch.Tensor,
+    weight_gen_pair: torch.Tensor,
     weight_pos: torch.Tensor,
     weight_neg: torch.Tensor,
 ) -> Tuple[
@@ -106,7 +106,7 @@ def _full_riesz_terms(
     Every returned tensor has shape [B].
     """
     distance_gen_pos = torch.cdist(gen_scaled, pos_scaled)
-    distance_gen_self = torch.cdist(gen_scaled, self_scaled)
+    distance_gen_self = torch.cdist(gen_scaled, gen_pair_scaled)
     distance_pos_pos = torch.cdist(pos_scaled, pos_scaled)
 
     attraction = _weighted_pair_mean(
@@ -118,7 +118,7 @@ def _full_riesz_terms(
     self_repulsion = _weighted_pair_mean(
         distance_gen_self,
         weight_gen,
-        weight_self_support,
+        weight_gen_pair,
     )
 
     # Preserve the original implementation: the positive-positive term
@@ -150,11 +150,11 @@ def _full_riesz_terms(
 
 def _sliced_riesz_terms(
     gen_scaled: torch.Tensor,
-    self_scaled: torch.Tensor,
+    gen_pair_scaled: torch.Tensor,
     pos_scaled: torch.Tensor,
     neg_scaled: torch.Tensor,
     weight_gen: torch.Tensor,
-    weight_self_support: torch.Tensor,
+    weight_gen_pair: torch.Tensor,
     weight_pos: torch.Tensor,
     weight_neg: torch.Tensor,
     num_projections: int,
@@ -190,7 +190,7 @@ def _sliced_riesz_terms(
     #   directions: [D, L]
     #   gen_projected: [B, N_gen, L]
     gen_projected = torch.matmul(gen_scaled, directions)
-    self_projected = torch.matmul(self_scaled, directions)
+    gen_pair_projected = torch.matmul(gen_pair_scaled, directions)
     pos_projected = torch.matmul(pos_scaled, directions)
     neg_projected = torch.matmul(neg_scaled, directions)
 
@@ -205,7 +205,7 @@ def _sliced_riesz_terms(
 
     distance_gen_self = torch.abs(
         gen_projected[:, :, None, :]
-        - self_projected[:, None, :, :]
+        - gen_pair_projected[:, None, :, :]
     )
 
     distance_pos_pos = torch.abs(
@@ -223,7 +223,7 @@ def _sliced_riesz_terms(
     self_repulsion_per_projection = _weighted_pair_mean_sliced(
         distance_gen_self,
         weight_gen,
-        weight_self_support,
+        weight_gen_pair,
     )
 
     # Preserve the original implementation: the positive-positive term
@@ -276,8 +276,6 @@ def riesz_loss(
     weight_gen: torch.Tensor | None = None,
     weight_pos: torch.Tensor | None = None,
     weight_neg: torch.Tensor | None = None,
-    self_support: torch.Tensor | None = None,
-    weight_self_support: torch.Tensor | None = None,
     epsilon: float = 1e-8,
     use_sliced: bool = False,
     num_projections: int = 64,
@@ -313,11 +311,8 @@ def riesz_loss(
     These one-dimensional objectives are then averaged over the random
     projections.
 
-    When ``self_support`` is supplied, it is treated as detached external
-    support and projected with the same random directions as ``gen``. The
-    self-repulsion coefficient is 2 because gradients flow through only the
-    live generated side. Without external support, the current generated
-    batch is used on both sides with coefficient 1.
+    The current generated batch is used on both sides of the generated
+    self-repulsion term.
 
     The returned loss has shape [B].
     """
@@ -373,42 +368,15 @@ def riesz_loss(
     if weight_neg is None:
         weight_neg = torch.ones_like(fixed_neg[:, :, 0])
 
-    external_self_support = self_support is not None
-    if self_support is None:
-        self_support = gen
-        weight_self_support = weight_gen
-    else:
-        if self_support.ndim != 3:
-            raise ValueError(
-                "self_support must have shape [B, particles, features], "
-                f"but received {tuple(self_support.shape)}"
-            )
-        if gen.shape[0] != self_support.shape[0]:
-            raise ValueError("gen and self_support must have the same batch size")
-        if gen.shape[-1] != self_support.shape[-1]:
-            raise ValueError(
-                "gen and self_support must have the same feature dimension"
-            )
-        if self_support.shape[1] == 0:
-            raise ValueError("self_support must contain at least one particle")
-        if weight_self_support is None:
-            weight_self_support = torch.ones_like(self_support[:, :, 0])
-
     gen = gen.float()
 
     # Positive and unconditional supports are fixed.
     fixed_pos = fixed_pos.detach().float()
     fixed_neg = fixed_neg.detach().float()
-    self_support = (
-        self_support.detach().float()
-        if external_self_support
-        else self_support.float()
-    )
 
     weight_gen = weight_gen.detach().float()
     weight_pos = weight_pos.detach().float()
     weight_neg = weight_neg.detach().float()
-    weight_self_support = weight_self_support.detach().float()
 
     # Match the original drift-loss normalization.
     #
@@ -416,12 +384,12 @@ def riesz_loss(
     # normalize each coordinate by scale / sqrt(feature_dimension).
     with torch.no_grad():
         scale_targets = torch.cat(
-            [self_support.detach(), fixed_neg, fixed_pos],
+            [gen.detach(), fixed_neg, fixed_pos],
             dim=1,
         )
 
         scale_weights = torch.cat(
-            [weight_self_support, weight_neg, weight_pos],
+            [weight_gen, weight_neg, weight_pos],
             dim=1,
         )
 
@@ -443,7 +411,6 @@ def riesz_loss(
         )
 
     gen_scaled = gen / scale_inputs
-    self_scaled = self_support / scale_inputs
     pos_scaled = fixed_pos / scale_inputs
     neg_scaled = fixed_neg / scale_inputs
 
@@ -455,11 +422,11 @@ def riesz_loss(
             fixed_negative_repulsion,
         ) = _sliced_riesz_terms(
             gen_scaled=gen_scaled,
-            self_scaled=self_scaled,
+            gen_pair_scaled=gen_scaled,
             pos_scaled=pos_scaled,
             neg_scaled=neg_scaled,
             weight_gen=weight_gen,
-            weight_self_support=weight_self_support,
+            weight_gen_pair=weight_gen,
             weight_pos=weight_pos,
             weight_neg=weight_neg,
             num_projections=num_projections,
@@ -472,19 +439,18 @@ def riesz_loss(
             fixed_negative_repulsion,
         ) = _full_riesz_terms(
             gen_scaled=gen_scaled,
-            self_scaled=self_scaled,
+            gen_pair_scaled=gen_scaled,
             pos_scaled=pos_scaled,
             neg_scaled=neg_scaled,
             weight_gen=weight_gen,
-            weight_self_support=weight_self_support,
+            weight_gen_pair=weight_gen,
             weight_pos=weight_pos,
             weight_neg=weight_neg,
         )
 
-    self_repulsion_coefficient = 2.0 if external_self_support else 1.0
     loss = (
         2.0 * attraction
-        - self_repulsion_coefficient * self_repulsion
+        - self_repulsion
         - target_repulsion
         - 2.0 * fixed_negative_repulsion
     )
@@ -493,18 +459,6 @@ def riesz_loss(
         "scale": scale.detach(),
         "riesz_attraction": attraction.detach().mean(),
         "riesz_self_repulsion": self_repulsion.detach().mean(),
-        "riesz_self_repulsion_coefficient": torch.tensor(
-            self_repulsion_coefficient,
-            device=loss.device,
-        ),
-        "riesz_external_self_support": torch.tensor(
-            float(external_self_support),
-            device=loss.device,
-        ),
-        "riesz_self_support_size": torch.tensor(
-            float(self_support.shape[1]),
-            device=loss.device,
-        ),
         "riesz_target_repulsion": target_repulsion.detach().mean(),
         "riesz_fixed_negative_repulsion": (
             fixed_negative_repulsion.detach().mean()
