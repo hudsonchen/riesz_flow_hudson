@@ -39,7 +39,7 @@ model:
 
 optimizer:
   lr_schedule:
-    learning_rate: 0.0002
+    learning_rate: 0.0004
     warmup_steps: 5000
     lr_schedule: "const"
     total_steps: 150000
@@ -91,10 +91,7 @@ train:
     epsilon: 1.0e-6
     use_sliced: true
     num_projections: 128
-    self_support_mode: "bank"
-    generated_bank_size: 64
-    generated_bank_samples: 64
-    generated_bank_dtype: "float16"
+    self_support_mode: "fresh"
 
 feature:
   mae_path: "hf://mae_latent_256"

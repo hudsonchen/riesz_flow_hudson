@@ -50,7 +50,7 @@ train:
   train_batch_size: 8
   seed: 42
   total_steps: 150000
-  save_per_step: 500
+  save_per_step: 5000
   keep_every: 2500
   eval_per_step: 500
   eval_samples: 64
