@@ -53,6 +53,15 @@ CONFIG=${CONFIG:-configs/gen/imagenet256_B_riesz.yaml}
 RUN_NAME=${RUN_NAME:-imagenet256_B_riesz_4nodes}
 WORKDIR=${WORKDIR:-"${RDS_ROOT}/runs/${RUN_NAME}"}
 RANK_ENTRYPOINT=${RANK_ENTRYPOINT:-"${TRAIN_SLURM_DIR}/torchrun_isolated_cache_entrypoint.py"}
+MAE_MODEL=${MAE_MODEL:-mae_latent_640}
+
+case "$MAE_MODEL" in
+    mae_latent_256|mae_latent_640) ;;
+    *)
+        echo "Unsupported MAE_MODEL: ${MAE_MODEL}" >&2
+        exit 1
+        ;;
+esac
 
 mapfile -t NODE_HOSTS < <(scontrol show hostnames "$SLURM_JOB_NODELIST")
 MASTER_ADDR=${MASTER_ADDR:-"${NODE_HOSTS[0]}"}
@@ -79,13 +88,13 @@ for cache_file in \
     }
 done
 
-MAE_ROOT="${WFLOW_DRIFTING_HF_ROOT}/models/mae/jax/mae_latent_640"
+MAE_ROOT="${WFLOW_DRIFTING_HF_ROOT}/models/mae/jax/${MAE_MODEL}"
 test -f "${MAE_ROOT}/metadata.json" || {
-    echo "Missing mae_latent_640 metadata: ${MAE_ROOT}/metadata.json" >&2
+    echo "Missing ${MAE_MODEL} metadata: ${MAE_ROOT}/metadata.json" >&2
     exit 1
 }
 if [[ ! -f "${MAE_ROOT}/ema_params.msgpack" && ! -f "${MAE_ROOT}/ema_params.pt" ]]; then
-    echo "Missing mae_latent_640 weights under: ${MAE_ROOT}" >&2
+    echo "Missing ${MAE_MODEL} weights under: ${MAE_ROOT}" >&2
     exit 1
 fi
 
@@ -98,7 +107,7 @@ echo "Config:         ${CONFIG}"
 echo "Run name:       ${RUN_NAME}"
 echo "Cache root:     ${WFLOW_CACHE_ROOT}"
 echo "Latent cache:   ${IMAGENET_CACHE_PATH}"
-echo "MAE-640:        ${MAE_ROOT}"
+echo "Feature MAE:    ${MAE_MODEL} (${MAE_ROOT})"
 echo "Workdir:        ${WORKDIR}"
 echo "Nodes:          ${NNODES}"
 echo "GPUs per node:  ${NGPU}"
@@ -108,7 +117,7 @@ echo "Master address: ${MASTER_ADDR}"
 echo "Master port:    ${MASTER_PORT}"
 
 export SHARED_MAE_ROOT="${MAE_ROOT}"
-export REPO_DIR RDS_ROOT NNODES NGPU MASTER_ADDR MASTER_PORT CONFIG RUN_NAME WORKDIR RANK_ENTRYPOINT SHARED_MAE_ROOT
+export REPO_DIR RDS_ROOT NNODES NGPU MASTER_ADDR MASTER_PORT CONFIG RUN_NAME WORKDIR RANK_ENTRYPOINT MAE_MODEL SHARED_MAE_ROOT
 export DRIFT_COMPILE=${DRIFT_COMPILE:-1}
 export DRIFT_FEAT_CHUNK=${DRIFT_FEAT_CHUNK:-1}
 export NCCL_DEBUG=${NCCL_DEBUG:-WARN}
@@ -139,7 +148,7 @@ srun \
         # allocated node does not provide enough writable space.
         node_cache_root=${WFLOW_NODE_CACHE_ROOT:-"/tmp/wflow-${SLURM_JOB_ID}-node-${SLURM_NODEID}"}
         node_hf_root="${node_cache_root}/drifting_hf_root"
-        node_mae_root="${node_hf_root}/models/mae/jax/mae_latent_640"
+        node_mae_root="${node_hf_root}/models/mae/jax/${MAE_MODEL}"
 
         if [[ -z "${WFLOW_NODE_CACHE_ROOT:-}" ]]; then
             remove_node_cache() {
@@ -167,7 +176,7 @@ srun \
         fi
 
         stage_started=$SECONDS
-        echo "[$(hostname)] Staging MAE-640 for node ${SLURM_NODEID}: ${node_mae_root}"
+        echo "[$(hostname)] Staging ${MAE_MODEL} for node ${SLURM_NODEID}: ${node_mae_root}"
         echo "[$(hostname)] Staging filesystem has ${available_bytes} bytes available; ${required_bytes} bytes required"
         cp -aL \
             "${SHARED_MAE_ROOT}/metadata.json" \
