@@ -39,7 +39,7 @@ model:
 
 optimizer:
   lr_schedule:
-    learning_rate: 0.0002
+    learning_rate: 0.0004
     warmup_steps: 5000
     lr_schedule: "const"
   weight_decay: 0.01
