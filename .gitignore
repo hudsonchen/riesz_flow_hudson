@@ -9,3 +9,10 @@ __pycache__/
 results_cs_cluster/
 results_dawn/
 results_sophia/
+
+# Generated evaluation outputs.
+/artifacts/
+
+# Local ImageNet-64 FID notebook workflow.
+/notebooks/fid_imagenet64.ipynb
+/scripts/eval_fid/imagenet64_fid_notebook_slurm.sh

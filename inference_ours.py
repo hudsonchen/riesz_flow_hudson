@@ -199,8 +199,8 @@ def run_eval(
         _print0("Computing metrics via torch-fidelity (inception-v3-compat) ...")
         metrics_dict = calculate_metrics(
             input1=save_folder, input2=fid_ref,
-            # torch-fidelity supports CUDA or CPU, but not XPU.
-            cuda=(device.type == "cuda"), isc=True, fid=True, kid=False, prc=False, verbose=True,
+            cuda=(device.type == "cuda"), xpu=(device.type == "xpu"),
+            isc=True, fid=True, kid=False, prc=False, verbose=True,
         )
 
         fid = metrics_dict.get("frechet_inception_distance")

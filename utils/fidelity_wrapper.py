@@ -11,6 +11,7 @@ Reference: https://github.com/LTH14/torch-fidelity
 
 from __future__ import annotations
 
+import multiprocessing
 import os
 import shutil
 import tempfile
@@ -18,6 +19,8 @@ import tempfile
 import numpy as np
 import requests
 import torch
+from torch.utils.data import DataLoader, Dataset
+from tqdm import tqdm
 
 from utils.env import TORCH_HUB_DIR
 
@@ -36,6 +39,7 @@ from torch_fidelity.utils import (
     create_feature_extractor,
     extract_featuresdict_from_input_id_cached,
     get_cacheable_input_name,
+    prepare_input_from_id,
 )
 
 
@@ -53,6 +57,48 @@ def url_to_path(url_or_path: str) -> str:
                 shutil.copyfileobj(response.raw, f)
         return local_path
     return url_or_path
+
+
+def _extract_featuresdict_xpu(input_id, feat_extractor, **kwargs):
+    """Extract torch-fidelity features on Intel XPU from a dataset input."""
+    dataset = prepare_input_from_id(input_id, **kwargs)
+    if not isinstance(dataset, Dataset):
+        raise TypeError("XPU fidelity extraction currently requires a dataset input")
+
+    batch_size = min(get_kwarg("batch_size", kwargs), len(dataset))
+    save_cpu_ram = get_kwarg("save_cpu_ram", kwargs)
+    verbose = get_kwarg("verbose", kwargs)
+    num_workers = 0 if save_cpu_ram else min(4, 2 * multiprocessing.cpu_count())
+    dataloader = DataLoader(
+        dataset,
+        batch_size=batch_size,
+        drop_last=False,
+        num_workers=num_workers,
+        pin_memory=False,
+    )
+
+    chunks = None
+    with tqdm(
+        disable=not verbose,
+        leave=False,
+        unit="samples",
+        total=len(dataset),
+        desc="Processing samples",
+    ) as progress, torch.no_grad():
+        for batch in dataloader:
+            batch = batch.to("xpu")
+            features = feat_extractor(batch)
+            features = feat_extractor.convert_features_tuple_to_dict(features)
+            features = {key: [value.cpu()] for key, value in features.items()}
+            if chunks is None:
+                chunks = features
+            else:
+                chunks = {key: chunks[key] + features[key] for key in chunks}
+            progress.update(batch.shape[0])
+
+    if chunks is None:
+        raise RuntimeError("No samples were available for XPU feature extraction")
+    return {key: torch.cat(values, dim=0) for key, values in chunks.items()}
 
 
 def calculate_metrics(**kwargs) -> dict:
@@ -100,18 +146,27 @@ def calculate_metrics(**kwargs) -> dict:
         feature_layer_kid = get_kwarg("feature_layer_kid", kwargs)
         feature_layers.add(feature_layer_kid)
 
+    use_xpu = bool(kwargs.pop("xpu", False))
+    if use_xpu and not torch.xpu.is_available():
+        raise RuntimeError("XPU fidelity extraction requested, but torch.xpu is unavailable")
+
     feat_extractor = create_feature_extractor(
         feature_extractor, list(feature_layers), **kwargs
     )
+    if use_xpu:
+        feat_extractor = feat_extractor.to("xpu")
 
-    if (not have_isc) and have_fid and (not have_kid):
+    if (not use_xpu) and (not have_isc) and have_fid and (not have_kid):
         metric_fid = fid_inputs_to_metric(feat_extractor, **kwargs)
         metrics.update(metric_fid)
     else:
         vprint(verbose, "Extracting features from input1")
-        featuresdict_1 = extract_featuresdict_from_input_id_cached(
-            1, feat_extractor, **kwargs
-        )
+        if use_xpu:
+            featuresdict_1 = _extract_featuresdict_xpu(1, feat_extractor, **kwargs)
+        else:
+            featuresdict_1 = extract_featuresdict_from_input_id_cached(
+                1, feat_extractor, **kwargs
+            )
 
         if have_isc:
             metric_isc = isc_featuresdict_to_metric(
