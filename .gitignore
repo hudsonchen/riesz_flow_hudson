@@ -14,5 +14,4 @@ results_sophia/
 /artifacts/
 
 # Local ImageNet-64 FID notebook workflow.
-/notebooks/fid_imagenet64.ipynb
 /scripts/eval_fid/imagenet64_fid_notebook_slurm.sh
