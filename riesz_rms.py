@@ -12,15 +12,23 @@ def _rms(value: torch.Tensor) -> torch.Tensor:
     return torch.sqrt(torch.mean(value * value))
 
 
-def _unit_away(
+def _weighted_away_sum(
     source: torch.Tensor,
     target: torch.Tensor,
+    target_weight: torch.Tensor,
     direction_epsilon: float,
+    target_chunk_size: int,
 ) -> torch.Tensor:
-    """Unit vectors from every target particle toward every source particle."""
-    delta = source[:, :, None, :] - target[:, None, :, :]
-    distance = torch.sqrt(torch.sum(delta * delta, dim=-1, keepdim=True))
-    return delta / torch.clamp(distance, min=float(direction_epsilon))
+    """Sum weighted unit-away directions without materializing all pairs."""
+    weighted_sum = torch.zeros_like(source)
+    for start in range(0, target.shape[1], target_chunk_size):
+        stop = min(start + target_chunk_size, target.shape[1])
+        delta = source[:, :, None, :] - target[:, None, start:stop, :]
+        distance = torch.sqrt(torch.sum(delta * delta, dim=-1, keepdim=True))
+        delta.div_(torch.clamp(distance, min=float(direction_epsilon)))
+        delta.mul_(target_weight[:, None, start:stop, None])
+        weighted_sum.add_(torch.sum(delta, dim=2))
+    return weighted_sum
 
 
 def _sliced_weighted_away(
@@ -50,6 +58,7 @@ def riesz_loss(
     direction_epsilon: float = 1e-8,
     use_sliced: bool = False,
     num_projections: int = 64,
+    target_chunk_size: int = 8,
 ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
     """Regress toward one detached, RMS-normalized Riesz field step.
 
@@ -58,12 +67,17 @@ def riesz_loss(
     ``fixed_pos``, repulsion from ``fixed_neg``, and same-batch repulsion among
     the current generated particles.  The complete raw field is divided by its
     global root-mean-square magnitude, matching the normalization used for each
-    field in ``drift_loss``.
+    field in ``drift_loss``.  The full-dimensional path processes target
+    particles in chunks to bound the pairwise-direction memory without changing
+    that field.
     """
     if epsilon <= 0 or rms_epsilon <= 0 or direction_epsilon <= 0:
         raise ValueError("epsilon, rms_epsilon, and direction_epsilon must be positive")
     if num_projections <= 0:
         raise ValueError("num_projections must be positive")
+    target_chunk_size = int(target_chunk_size)
+    if target_chunk_size <= 0:
+        raise ValueError("target_chunk_size must be positive")
     if gen.ndim != 3 or fixed_pos.ndim != 3:
         raise ValueError("gen and fixed_pos must have shape [B, particles, D]")
     if gen.shape[0] != fixed_pos.shape[0] or gen.shape[-1] != fixed_pos.shape[-1]:
@@ -175,40 +189,46 @@ def riesz_loss(
                 )
             )
         else:
-            away_from_pos = _unit_away(
-                old_gen_scaled, pos_scaled, direction_epsilon
+            attraction_sum = _weighted_away_sum(
+                old_gen_scaled,
+                pos_scaled,
+                weight_pos,
+                direction_epsilon,
+                target_chunk_size,
             )
             attraction_field = (
                 -2.0
                 * weight_gen[:, :, None]
-                * torch.sum(
-                    away_from_pos * weight_pos[:, None, :, None], dim=2
-                )
+                * attraction_sum
                 / float(n_gen * n_pos)
             )
 
-            away_from_self = _unit_away(
-                old_gen_scaled, old_gen_scaled, direction_epsilon
+            self_repulsion_sum = _weighted_away_sum(
+                old_gen_scaled,
+                old_gen_scaled,
+                weight_gen,
+                direction_epsilon,
+                target_chunk_size,
             )
             self_repulsion_field = (
                 2.0
                 * weight_gen[:, :, None]
-                * torch.sum(
-                    away_from_self * weight_gen[:, None, :, None], dim=2
-                )
+                * self_repulsion_sum
                 / float(n_gen * n_gen)
             )
 
             if neg_scaled.shape[1] > 0:
-                away_from_neg = _unit_away(
-                    old_gen_scaled, neg_scaled, direction_epsilon
+                fixed_negative_sum = _weighted_away_sum(
+                    old_gen_scaled,
+                    neg_scaled,
+                    weight_neg,
+                    direction_epsilon,
+                    target_chunk_size,
                 )
                 fixed_negative_field = (
                     2.0
                     * weight_gen[:, :, None]
-                    * torch.sum(
-                        away_from_neg * weight_neg[:, None, :, None], dim=2
-                    )
+                    * fixed_negative_sum
                     / float(n_gen * neg_scaled.shape[1])
                 )
             else:
