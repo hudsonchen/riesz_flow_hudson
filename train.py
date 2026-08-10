@@ -35,6 +35,7 @@ from tqdm import tqdm
 from dataset.dataset import get_postprocess_fn, infinite_sampler
 from drift_loss import drift_loss
 from drift_loss_ot import drift_loss_ot
+from matern_rms import matern32_loss
 from riesz_loss import riesz_loss as direct_riesz_loss
 from riesz_rms import riesz_loss as rms_riesz_loss
 from riesz_loss_sliced import riesz_loss as sliced_riesz_loss
@@ -117,6 +118,8 @@ def train_step(
     ot_kwargs: dict | None = None,
     use_riesz: bool = False,
     riesz_kwargs: dict | None = None,
+    use_matern: bool = False,
+    matern_kwargs: dict | None = None,
     diverse_noise: bool = False,
 ):
     labels = torch.as_tensor(labels, device=device, dtype=torch.long)
@@ -146,15 +149,30 @@ def train_step(
     n_gen = int(gen_per_label)
     n_uncond = negative_samples.shape[1]
 
-    riesz_cfg = dict(riesz_kwargs or {})
-    use_rms_riesz = bool(riesz_cfg.pop("use_rms", False))
-    use_sliced_riesz = bool(riesz_cfg.pop("use_sliced", False))
-    if use_sliced_riesz:
-        riesz_cfg["use_sliced"] = True
+    _use_riesz = bool(use_riesz)
+    _use_matern = bool(use_matern)
+    if _use_riesz and _use_matern:
+        raise ValueError("use_riesz and use_matern cannot both be true")
 
-    riesz_loss_fn = rms_riesz_loss if use_rms_riesz else direct_riesz_loss
-    if use_sliced_riesz and not use_rms_riesz:
-        riesz_loss_fn = sliced_riesz_loss
+    if _use_matern:
+        particle_loss_fn = matern32_loss
+        particle_loss_kwargs = dict(matern_kwargs or {})
+    else:
+        riesz_cfg = dict(riesz_kwargs or {})
+        use_rms_riesz = bool(riesz_cfg.pop("use_rms", False))
+        use_sliced_riesz = bool(riesz_cfg.pop("use_sliced", False))
+        if use_sliced_riesz:
+            riesz_cfg["use_sliced"] = True
+
+        if use_rms_riesz:
+            particle_loss_fn = rms_riesz_loss
+        elif use_sliced_riesz:
+            particle_loss_fn = sliced_riesz_loss
+        else:
+            particle_loss_fn = direct_riesz_loss
+        particle_loss_kwargs = riesz_cfg
+
+    _use_particle_field = _use_riesz or _use_matern
 
     uncond_w = (cfg - 1.0) * (n_gen - 1) / max(1, n_uncond)
 
@@ -210,8 +228,7 @@ def train_step(
         use_no_sync = hasattr(state.model, "no_sync") and accum_idx < actual_accum - 1
         sync_ctx = state.model.no_sync() if use_no_sync else nullcontext()
 
-        _use_riesz = bool(use_riesz)
-        _use_ot = ot_mode == "debiased" and not _use_riesz
+        _use_ot = ot_mode == "debiased" and not _use_particle_field
         _ot_kw = ot_kwargs or {}
         _use_new_cfg = _ot_kw.get("use_new_cfg", False)
         _resample_neg = _ot_kw.get("resample_neg", False) and _use_ot
@@ -249,7 +266,7 @@ def train_step(
                 feature_uncond = chunk_sg[k][:, n_pos:]
                 feature_gen = gen_features[k]
 
-                if _use_riesz:
+                if _use_particle_field:
                     feature_pos = rearrange(feature_pos, "b x f d -> (b f) x d")
                     feature_gen = rearrange(feature_gen, "b x f d -> (b f) x d")
                     feature_uncond = rearrange(feature_uncond, "b x f d -> (b f) x d")
@@ -267,14 +284,14 @@ def train_step(
                         f=feature_repeats,
                         k=n_uncond,
                     )
-                    loss_feat, info = riesz_loss_fn(
+                    loss_feat, info = particle_loss_fn(
                         gen=feature_gen,
                         fixed_pos=feature_pos,
                         fixed_neg=feature_uncond,
                         weight_gen=torch.ones_like(feature_gen[:, :, 0]),
                         weight_pos=weight_pos,
                         weight_neg=weight_neg,
-                        **riesz_cfg,
+                        **particle_loss_kwargs,
                     )
                 else:
                     feature_pos = rearrange(feature_pos, "b x f d -> (b f) x d")
@@ -326,7 +343,7 @@ def train_step(
                             weight_neg=ot_neg_w,
                             **ot_loss_kwargs,
                         )
-                elif not _use_riesz:
+                elif not _use_particle_field:
                     loss_feat, info = drift_loss(
                         gen=feature_gen,
                         fixed_pos=feature_pos,
@@ -449,7 +466,7 @@ def train_gen(
     max_grad_norm=2.0,
     loss_kwargs=dict(R_list=(0.02, 0.05, 0.2)),
     keep_every=500000,
-    keep_last=2,
+    keep_last=None,
     init_from="",
     push_per_step=0,
     push_at_resume=3000,
@@ -459,6 +476,8 @@ def train_gen(
     ot_kwargs=None,
     use_riesz=False,
     riesz_kwargs=None,
+    use_matern=False,
+    matern_kwargs=None,
     diverse_noise=False,
 ):
     if isinstance(ema_decay, (list, tuple)):
@@ -573,6 +592,8 @@ def train_gen(
                     ot_kwargs=_ot_kw,
                     use_riesz=use_riesz,
                     riesz_kwargs=riesz_kwargs,
+                    use_matern=use_matern,
+                    matern_kwargs=matern_kwargs,
                     diverse_noise=diverse_noise,
                     **forward_dict,
                 ),
@@ -597,6 +618,8 @@ def train_gen(
             ot_kwargs=_ot_kw,
             use_riesz=use_riesz,
             riesz_kwargs=riesz_kwargs,
+            use_matern=use_matern,
+            matern_kwargs=matern_kwargs,
             diverse_noise=diverse_noise,
             **forward_dict,
         )

@@ -53,7 +53,6 @@ train:
   seed: 42
   total_steps: 150000
   save_per_step: 5000
-  keep_last: 5
   keep_every: null
   eval_per_step: 500
   eval_samples: 5000
@@ -77,7 +76,7 @@ train:
     use_mean: true
     every_k_block: 2
   loss_kwargs:
-    R_list: [0.05]
+    R_list: [0.2, 0.05, 0.02]
   cfg_list: [1.0, 1.5, 2.0, 2.5, 3.0, 3.5]
   ema_decay: 0.999
   push_per_step: 256

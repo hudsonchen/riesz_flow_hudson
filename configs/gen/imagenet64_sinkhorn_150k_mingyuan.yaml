@@ -53,7 +53,6 @@ train:
   seed: 42
   total_steps: 150000
   save_per_step: 5000
-  keep_last: 5
   keep_every: null
   eval_per_step: 500
   eval_samples: 5000

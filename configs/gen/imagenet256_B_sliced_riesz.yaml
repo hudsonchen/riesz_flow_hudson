@@ -52,7 +52,6 @@ train:
   # 200,160 optimizer steps, matching the upstream 200k-step B/2 budget.
   num_epochs: 160
   save_per_step: 1000
-  keep_last: null
   keep_every: null
   eval_per_step: 5000
   # Generate 64 samples globally per CFG and save a 24-image gathered grid.
