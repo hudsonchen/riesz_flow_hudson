@@ -218,9 +218,11 @@ def riesz_loss(
             attraction_field + self_repulsion_field + fixed_negative_field
         )
         force_mean_square = torch.mean(raw_field * raw_field)
-        force_scale = torch.sqrt(
-            torch.clamp(force_mean_square, min=float(rms_epsilon))
-        )
+        force_rms = torch.sqrt(force_mean_square)
+        # ``rms_epsilon`` is an RMS-scale floor.  Applying it to the mean
+        # square before the square root would impose a much larger
+        # sqrt(rms_epsilon) floor and under-normalize small sliced fields.
+        force_scale = torch.clamp(force_rms, min=float(rms_epsilon))
         frozen_velocity = (raw_field / force_scale).detach()
         goal_scaled = (old_gen_scaled + frozen_velocity).detach()
 
@@ -229,7 +231,7 @@ def riesz_loss(
 
     info = {
         "scale": scale.detach(),
-        "riesz_force_rms": torch.sqrt(force_mean_square).detach(),
+        "riesz_force_rms": force_rms.detach(),
         "riesz_force_scale": force_scale.detach(),
         "riesz_frozen_velocity_rms": _rms(frozen_velocity).detach(),
         "riesz_attraction_force_rms": _rms(attraction_field).detach(),

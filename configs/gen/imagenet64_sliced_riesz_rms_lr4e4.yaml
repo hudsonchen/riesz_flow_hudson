@@ -93,6 +93,7 @@ train:
     # Construct the current-batch sliced-Riesz field, normalize the complete
     # field to unit RMS, and regress toward its detached one-step target.
     use_rms: true
+    rms_epsilon: 1.0e-8
     use_sliced: true
     num_projections: 128
 
