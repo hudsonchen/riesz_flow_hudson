@@ -28,8 +28,8 @@ set -u
 REPO_DIR=${REPO_DIR:-/home/rc-chen1/riesz_flow_hudson}
 RDS_ROOT=${RDS_ROOT:-/home/rc-chen1/rds/rds-airr-p109-tfgYl93jDnM}
 NOTEBOOK=${NOTEBOOK:-"${REPO_DIR}/notebooks/fid_imagenet256.ipynb"}
-OUTPUT_DIR=${OUTPUT_DIR:-"${REPO_DIR}/artifacts/fid_imagenet256/notebooks"}
-OUTPUT_NAME=${OUTPUT_NAME:-"fid_imagenet256_${SLURM_JOB_ID}.ipynb"}
+OUTPUT_DIR=${OUTPUT_DIR:-"${REPO_DIR}/notebooks"}
+OUTPUT_NAME=${OUTPUT_NAME:-"fid_imagenet256.ipynb"}
 KERNEL_NAME=${KERNEL_NAME:-python3}
 
 cd "$REPO_DIR"
