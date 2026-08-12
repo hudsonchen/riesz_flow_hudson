@@ -6,6 +6,7 @@ import argparse
 import json
 import math
 import os
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -135,6 +136,14 @@ def build_parser() -> argparse.ArgumentParser:
         default="",
         help="Output directory; defaults to <run-dir>/fid.",
     )
+    parser.add_argument(
+        "--work-root",
+        default="",
+        help=(
+            "Scratch root for generated images. Defaults to <result-dir>/work; "
+            "set this to node-local storage to avoid large small-file workloads on RDS."
+        ),
+    )
     parser.add_argument("--keep-samples", action="store_true")
     parser.add_argument(
         "--skip-existing",
@@ -172,6 +181,11 @@ def main() -> None:
         result_dir = run_dir / "fid"
     else:
         result_dir = checkpoint.parent.parent / "fid"
+    work_root = (
+        Path(args.work_root).expanduser().resolve()
+        if args.work_root
+        else result_dir / "work"
+    )
 
     default_ref = IMAGENET64_FID_NPZ if resolution == 64 else IMAGENET_FID_NPZ
     fid_ref = Path(args.fid_ref or default_ref).expanduser().resolve()
@@ -189,6 +203,7 @@ def main() -> None:
     _print0(f"CFG scales:   {cfg_scales}")
     _print0(f"Samples/CFG:  {args.num_samples}")
     _print0(f"Result dir:   {result_dir}")
+    _print0(f"Work root:    {work_root}")
 
     model, postprocess_fn, checkpoint_step, device = _load_model(
         str(checkpoint), str(config_path)
@@ -220,21 +235,25 @@ def main() -> None:
             continue
 
         _print0(f"Evaluating CFG {cfg_text} ...")
-        cfg_workdir = result_dir / "work" / f"cfg{cfg_text}"
-        result = run_eval(
-            model,
-            postprocess_fn,
-            str(checkpoint),
-            step,
-            str(cfg_workdir),
-            num_samples=args.num_samples,
-            cfg_scale=cfg_scale,
-            gen_bsz=args.gen_bsz,
-            fid_ref=str(fid_ref),
-            seed=args.seed,
-            keep_samples=args.keep_samples,
-            device=device,
-        )
+        cfg_workdir = work_root / f"step{step:08d}" / f"cfg{cfg_text}"
+        try:
+            result = run_eval(
+                model,
+                postprocess_fn,
+                str(checkpoint),
+                step,
+                str(cfg_workdir),
+                num_samples=args.num_samples,
+                cfg_scale=cfg_scale,
+                gen_bsz=args.gen_bsz,
+                fid_ref=str(fid_ref),
+                seed=args.seed,
+                keep_samples=args.keep_samples,
+                device=device,
+            )
+        finally:
+            if not args.keep_samples and process_index() == 0:
+                shutil.rmtree(cfg_workdir, ignore_errors=True)
         if result is not None:
             result.update(
                 {
