@@ -37,6 +37,7 @@ from drift_loss import drift_loss
 from drift_loss_ot import drift_loss_ot
 from matern_rms import matern32_loss
 from riesz_loss import riesz_loss as direct_riesz_loss
+from riesz_power_topk import riesz_loss as power_topk_riesz_loss
 from riesz_rms import riesz_loss as rms_riesz_loss
 from riesz_loss_sliced import riesz_loss as sliced_riesz_loss
 from memory_bank import ArrayMemoryBank
@@ -161,6 +162,12 @@ def train_step(
         riesz_cfg = dict(riesz_kwargs or {})
         use_rms_riesz = bool(riesz_cfg.pop("use_rms", False))
         use_sliced_riesz = bool(riesz_cfg.pop("use_sliced", False))
+        use_power_topk_riesz = "power" in riesz_cfg or "topk" in riesz_cfg
+        if use_power_topk_riesz and (use_rms_riesz or use_sliced_riesz):
+            raise ValueError(
+                "Powered top-k Riesz cannot be combined with use_rms or "
+                "use_sliced; run it as a separate scalar-energy ablation"
+            )
         if use_sliced_riesz:
             riesz_cfg["use_sliced"] = True
 
@@ -168,6 +175,8 @@ def train_step(
             particle_loss_fn = rms_riesz_loss
         elif use_sliced_riesz:
             particle_loss_fn = sliced_riesz_loss
+        elif use_power_topk_riesz:
+            particle_loss_fn = power_topk_riesz_loss
         else:
             particle_loss_fn = direct_riesz_loss
         particle_loss_kwargs = riesz_cfg
