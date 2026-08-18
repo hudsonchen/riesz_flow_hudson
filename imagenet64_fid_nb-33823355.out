@@ -1,7 +1,0 @@
-Host:            pvc-s-36
-Start time:      Tue Aug 18 06:45:50 AM BST 2026
-Repository:      /home/rc-chen1/riesz_flow_hudson
-Notebook:        /home/rc-chen1/riesz_flow_hudson/notebooks/fid_imagenet64.ipynb
-Executed output: /home/rc-chen1/riesz_flow_hudson/notebooks/fid_imagenet64.ipynb
-Kernel:          python3
-End time: Tue Aug 18 08:38:26 AM BST 2026
