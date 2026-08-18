@@ -1,0 +1,5 @@
+Loading rhel9/default-dawn
+  Loading requirement: rhel9/global rhel9/slurm dawn-env-rhel9/2025-03-23
+[NbConvertApp] Converting notebook /home/rc-chen1/riesz_flow_hudson/notebooks/fid_imagenet64.ipynb to notebook
+[IPKernelApp] WARNING | Kernel is running over TCP without encryption. All communication (including code and outputs) is sent in plain text and is susceptible to eavesdropping. Use IPC transport or launch with kernel manager-provisioned CurveZMQ keys to enable transport encryption.
+[NbConvertApp] Writing 726775 bytes to /home/rc-chen1/riesz_flow_hudson/notebooks/fid_imagenet64.ipynb
