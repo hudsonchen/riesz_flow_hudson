@@ -163,11 +163,12 @@ def train_step(
         use_rms_riesz = bool(riesz_cfg.pop("use_rms", False))
         use_sliced_riesz = bool(riesz_cfg.pop("use_sliced", False))
         use_power_topk_riesz = "power" in riesz_cfg or "topk" in riesz_cfg
-        if use_power_topk_riesz and (use_rms_riesz or use_sliced_riesz):
+        if use_sliced_riesz and use_power_topk_riesz:
             raise ValueError(
-                "Powered top-k Riesz cannot be combined with use_rms or "
-                "use_sliced; run it as a separate scalar-energy ablation"
+                "Powered top-k Riesz cannot be combined with use_sliced"
             )
+        if use_rms_riesz and "power" in riesz_cfg:
+            raise ValueError("Powered Riesz is not supported with use_rms")
         if use_sliced_riesz:
             riesz_cfg["use_sliced"] = True
 

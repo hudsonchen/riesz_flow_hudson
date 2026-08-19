@@ -31,6 +31,46 @@ def _weighted_away_sum(
     return weighted_sum
 
 
+def _topk_weighted_away_sum(
+    source: torch.Tensor,
+    target: torch.Tensor,
+    target_weight: torch.Tensor,
+    direction_epsilon: float,
+    topk: int,
+    exclude_self: bool = False,
+) -> torch.Tensor:
+    """Sum weighted directions to the nearest targets for every source."""
+    if topk <= 0:
+        raise ValueError("topk must be positive")
+    if target.shape[1] == 0:
+        return torch.zeros_like(source)
+
+    distance = torch.cdist(source, target)
+    if exclude_self:
+        if source.shape[1] != target.shape[1]:
+            raise ValueError("self-neighbour exclusion requires equal particle counts")
+        diagonal = torch.eye(
+            source.shape[1], device=source.device, dtype=torch.bool
+        ).unsqueeze(0)
+        distance = distance.masked_fill(diagonal, float("inf"))
+
+    available = target.shape[1] - int(exclude_self)
+    k = min(int(topk), available)
+    if k == 0:
+        return torch.zeros_like(source)
+
+    indices = torch.topk(distance, k=k, dim=-1, largest=False).indices
+    batch = torch.arange(source.shape[0], device=source.device)[:, None, None]
+    selected_target = target[batch, indices]
+    selected_weight = target_weight[batch, indices]
+    delta = source[:, :, None, :] - selected_target
+    selected_distance = torch.sqrt(torch.sum(delta * delta, dim=-1, keepdim=True))
+    direction = delta / torch.clamp(
+        selected_distance, min=float(direction_epsilon)
+    )
+    return torch.sum(direction * selected_weight[..., None], dim=2)
+
+
 def _sliced_weighted_away(
     source_projected: torch.Tensor,
     target_projected: torch.Tensor,
@@ -59,6 +99,7 @@ def riesz_loss(
     use_sliced: bool = False,
     num_projections: int = 64,
     target_chunk_size: int = 8,
+    topk: int | None = None,
 ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
     """Regress toward one detached, RMS-normalized Riesz field step.
 
@@ -75,6 +116,10 @@ def riesz_loss(
         raise ValueError("epsilon, rms_epsilon, and direction_epsilon must be positive")
     if num_projections <= 0:
         raise ValueError("num_projections must be positive")
+    if topk is not None and int(topk) <= 0:
+        raise ValueError("topk must be positive when provided")
+    if use_sliced and topk is not None:
+        raise ValueError("topk is only supported for full-dimensional Riesz")
     target_chunk_size = int(target_chunk_size)
     if target_chunk_size <= 0:
         raise ValueError("target_chunk_size must be positive")
@@ -189,47 +234,56 @@ def riesz_loss(
                 )
             )
         else:
-            attraction_sum = _weighted_away_sum(
-                old_gen_scaled,
-                pos_scaled,
-                weight_pos,
-                direction_epsilon,
-                target_chunk_size,
-            )
+            if topk is None:
+                attraction_sum = _weighted_away_sum(
+                    old_gen_scaled, pos_scaled, weight_pos,
+                    direction_epsilon, target_chunk_size,
+                )
+                attraction_count = n_pos
+            else:
+                attraction_sum = _topk_weighted_away_sum(
+                    old_gen_scaled, pos_scaled, weight_pos,
+                    direction_epsilon, int(topk),
+                )
+                attraction_count = min(int(topk), n_pos)
             attraction_field = (
-                -2.0
-                * weight_gen[:, :, None]
-                * attraction_sum
-                / float(n_gen * n_pos)
+                -2.0 * weight_gen[:, :, None] * attraction_sum
+                / float(n_gen * attraction_count)
             )
 
-            self_repulsion_sum = _weighted_away_sum(
-                old_gen_scaled,
-                old_gen_scaled,
-                weight_gen,
-                direction_epsilon,
-                target_chunk_size,
-            )
+            if topk is None:
+                self_repulsion_sum = _weighted_away_sum(
+                    old_gen_scaled, old_gen_scaled, weight_gen,
+                    direction_epsilon, target_chunk_size,
+                )
+                self_count = n_gen
+            else:
+                self_repulsion_sum = _topk_weighted_away_sum(
+                    old_gen_scaled, old_gen_scaled, weight_gen,
+                    direction_epsilon, int(topk), exclude_self=True,
+                )
+                self_count = min(int(topk), max(1, n_gen - 1))
             self_repulsion_field = (
-                2.0
-                * weight_gen[:, :, None]
-                * self_repulsion_sum
-                / float(n_gen * n_gen)
+                2.0 * weight_gen[:, :, None] * self_repulsion_sum
+                / float(n_gen * self_count)
             )
 
             if neg_scaled.shape[1] > 0:
-                fixed_negative_sum = _weighted_away_sum(
-                    old_gen_scaled,
-                    neg_scaled,
-                    weight_neg,
-                    direction_epsilon,
-                    target_chunk_size,
-                )
+                if topk is None:
+                    fixed_negative_sum = _weighted_away_sum(
+                        old_gen_scaled, neg_scaled, weight_neg,
+                        direction_epsilon, target_chunk_size,
+                    )
+                    negative_count = neg_scaled.shape[1]
+                else:
+                    fixed_negative_sum = _topk_weighted_away_sum(
+                        old_gen_scaled, neg_scaled, weight_neg,
+                        direction_epsilon, int(topk),
+                    )
+                    negative_count = min(int(topk), neg_scaled.shape[1])
                 fixed_negative_field = (
-                    2.0
-                    * weight_gen[:, :, None]
-                    * fixed_negative_sum
-                    / float(n_gen * neg_scaled.shape[1])
+                    2.0 * weight_gen[:, :, None] * fixed_negative_sum
+                    / float(n_gen * negative_count)
                 )
             else:
                 fixed_negative_field = torch.zeros_like(old_gen_scaled)
@@ -259,6 +313,9 @@ def riesz_loss(
         "riesz_fixed_negative_force_rms": _rms(fixed_negative_field).detach(),
         "riesz_generated_particle_count": torch.tensor(
             float(n_gen), device=gen.device
+        ),
+        "riesz_topk": torch.tensor(
+            float(-1 if topk is None else int(topk)), device=gen.device
         ),
         "riesz_use_sliced": torch.tensor(float(use_sliced), device=gen.device),
         "riesz_num_projections": torch.tensor(
