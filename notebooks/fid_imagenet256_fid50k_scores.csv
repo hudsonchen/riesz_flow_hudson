@@ -24,6 +24,7 @@ imagenet256_ablation_sinkhorn_2nodes,22000,1.19,10.694381328692884
 imagenet256_ablation_sinkhorn_2nodes,24000,1.19,10.426280690905344
 imagenet256_ablation_sinkhorn_2nodes,26000,1.19,10.237550587928524
 imagenet256_ablation_sinkhorn_2nodes,28000,1.19,10.039907126966682
+imagenet256_ablation_sinkhorn_2nodes,30000,1.19,9.799886129394963
 imagenet256_ablation_sliced_riesz_frozen_velocity_rms_2nodes,6000,1.19,42.29403303243754
 imagenet256_ablation_sliced_riesz_frozen_velocity_rms_2nodes,8000,1.19,30.422204373271313
 imagenet256_ablation_sliced_riesz_frozen_velocity_rms_2nodes,10000,1.19,25.784009425693398
